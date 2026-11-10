@@ -9,9 +9,49 @@ use std::{
 };
 
 pub const WHEEL_MULTIPLIER: f64 = 4.;
+pub const WHEEL_LINE_PIXELS: f64 = 20.;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ScrollMetrics {
+    pub viewport: f64,
+    pub extent: f64,
+    pub offset: f64,
+    pub top: f64,
+}
+
+impl ScrollMetrics {
+    pub fn read(handle: &NodeHandle) -> Option<Self> {
+        let doc = handle.doc();
+        let node = doc.get_node(handle.node_id())?;
+        Some(Self {
+            viewport: f64::from(node.final_layout().size.height),
+            extent: f64::from(node.final_layout().scroll_height()),
+            offset: node.scroll_offset().y,
+            top: f64::from(node.absolute_position(0., 0.).y) + node.scroll_offset().y,
+        })
+    }
+
+    pub fn thumb_length(self) -> f64 {
+        (self.viewport * self.viewport / (self.viewport + self.extent).max(1.))
+            .max(42.)
+            .min(self.viewport)
+    }
+
+    pub fn thumb_top(self) -> f64 {
+        self.offset / self.extent.max(1.) * (self.viewport - self.thumb_length())
+    }
+}
+
+#[derive(Clone)]
+struct ScrollbarDrag {
+    handle: NodeHandle,
+    grab: f64,
+    onchange: EventHandler<bool>,
+}
 
 pub struct LayoutBarrier {
     mounted: RefCell<Option<NodeHandle>>,
+    scrollbar_drag: RefCell<Option<ScrollbarDrag>>,
     pending: Cell<bool>,
     started: Instant,
 }
@@ -20,6 +60,7 @@ impl Default for LayoutBarrier {
     fn default() -> Self {
         Self {
             mounted: RefCell::new(None),
+            scrollbar_drag: RefCell::new(None),
             pending: Cell::new(true),
             started: Instant::now(),
         }
@@ -27,6 +68,66 @@ impl Default for LayoutBarrier {
 }
 
 impl LayoutBarrier {
+    /// Keep scrolling in Blitz; only the hover rail is application-owned. @req DECL0001
+    pub fn begin_scrollbar_drag(&self, handle: NodeHandle, y: f64, onchange: EventHandler<bool>) {
+        let Some(metrics) = ScrollMetrics::read(&handle) else {
+            return;
+        };
+        if metrics.extent <= 0.5 {
+            return;
+        }
+        self.end_scrollbar_drag();
+        let local = y - metrics.top - metrics.thumb_top();
+        let grab = match (0. ..=metrics.thumb_length()).contains(&local) {
+            true => local,
+            false => metrics.thumb_length() / 2.,
+        };
+        *self.scrollbar_drag.borrow_mut() = Some(ScrollbarDrag {
+            handle,
+            grab,
+            onchange,
+        });
+        self.drag_scrollbar(y);
+    }
+
+    pub fn drag_scrollbar(&self, y: f64) {
+        let Some(drag) = self.scrollbar_drag.borrow().clone() else {
+            return;
+        };
+        let Some(metrics) = ScrollMetrics::read(&drag.handle) else {
+            self.end_scrollbar_drag();
+            return;
+        };
+        let travel = (metrics.viewport - metrics.thumb_length()).max(1.);
+        let offset = ((y - metrics.top - drag.grab) / travel).clamp(0., 1.) * metrics.extent;
+        {
+            let mut doc = drag.handle.doc_mut();
+            let x = match doc.get_node(drag.handle.node_id()) {
+                Some(node) => node.scroll_offset().x,
+                None => return,
+            };
+            doc.scroll_to(
+                drag.handle.node_id(),
+                x,
+                offset,
+                blitz_dom::ScrollBehavior::Instant,
+            );
+            doc.shell_provider.request_redraw();
+        }
+        drag.onchange.call(true);
+    }
+
+    pub fn end_scrollbar_drag(&self) {
+        let drag = self.scrollbar_drag.borrow_mut().take();
+        if let Some(drag) = drag {
+            drag.onchange.call(false);
+        }
+    }
+
+    pub fn cancel_scrollbar_drag(&self) {
+        self.scrollbar_drag.borrow_mut().take();
+    }
+
     pub fn selected_text(&self) -> Option<String> {
         let mounted = self.mounted.borrow();
         let doc = mounted.as_ref()?.doc();
@@ -73,9 +174,10 @@ impl LayoutBarrier {
         use dioxus_native::winit::event::MouseScrollDelta;
         let extra = WHEEL_MULTIPLIER - 1.;
         let (x, y) = match delta {
-            MouseScrollDelta::LineDelta(x, y) => {
-                (f64::from(*x) * 20. * extra, f64::from(*y) * 20. * extra)
-            }
+            MouseScrollDelta::LineDelta(x, y) => (
+                f64::from(*x) * WHEEL_LINE_PIXELS * extra,
+                f64::from(*y) * WHEEL_LINE_PIXELS * extra,
+            ),
             MouseScrollDelta::PixelDelta(position) => (position.x * extra, position.y * extra),
             _ => return,
         };

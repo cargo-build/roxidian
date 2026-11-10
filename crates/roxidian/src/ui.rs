@@ -304,6 +304,7 @@ fn app() -> Element {
         match event {
             WindowEvent::PointerMoved { position, .. } => {
                 barrier.flush();
+                barrier.drag_scrollbar(position.y / window.scale_factor());
                 let drag = state.peek().drag;
                 if let Some(boundary) = drag {
                     let scale = window.scale_factor();
@@ -319,6 +320,7 @@ fn app() -> Element {
                 ..
             } => {
                 barrier.flush();
+                barrier.end_scrollbar_drag();
                 if state.peek().drag.is_some() {
                     state.write().drag = None;
                 }
@@ -326,6 +328,7 @@ fn app() -> Element {
             WindowEvent::PointerButton { .. } | WindowEvent::PointerEntered { .. } => {
                 barrier.flush()
             }
+            WindowEvent::Focused(false) => barrier.end_scrollbar_drag(),
             WindowEvent::MouseWheel { delta, .. } => {
                 barrier.flush();
                 barrier.accelerate_wheel(delta);
@@ -498,6 +501,7 @@ pub fn run(launch: Launch, theme: Theme) {
 mod document_view;
 mod file_icons;
 mod layout;
+mod scrollbar;
 mod tree;
 use layout::Mode;
 #[cfg(test)]

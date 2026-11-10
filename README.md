@@ -71,6 +71,7 @@ Markdown fills the reader with 5vw horizontal padding. Dark mode adds SynthWave 
 folders use italic cyan labels. Their ancestor chain stays visible when the tree scrolls.
 Markdown filenames use violet; file types have embedded SVG icons. AGENTS.md and
 SKILL.md use a bold animated neon gradient. Wheel scrolling is 4× the native baseline.
+Each document pane reveals a draggable scrollbar when the pointer reaches its right edge.
 Fenced blocks offer Copy and Wrap. Shell highlighting
 uses syntax positions: commands are bold, positional arguments upright, flags and ENV
 names use separate colours, and flag/ENV values are italic. A bounded flag catalogue

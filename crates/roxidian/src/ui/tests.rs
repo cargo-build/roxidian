@@ -501,3 +501,119 @@ fn accelerated_wheel_uses_the_requested_multiplier() {
         200.
     );
 }
+
+#[test]
+fn document_scrollbar_reveals_before_wheel_and_drags_each_pane() {
+    use blitz_traits::events::{BlitzWheelDelta, BlitzWheelEvent, MouseEventButton, UiEvent};
+    [Mode::Preview, Mode::Source, Mode::Split]
+        .into_iter()
+        .for_each(|mode| {
+            let Harness {
+                mut doc,
+                mut state,
+                barrier,
+            } = harness();
+            doc.vdom
+                .in_scope(ScopeId::APP, || state.write().mode = mode);
+            doc.poll(None);
+            barrier.flush();
+            let panes = doc
+                .inner
+                .borrow()
+                .query_selector_all(".document-pane")
+                .expect("panes");
+            assert_eq!(panes.len(), if mode == Mode::Split { 2 } else { 1 });
+            panes.into_iter().for_each(|pane| {
+                let (content, rail) = {
+                    let inner = doc.inner.borrow();
+                    let children = &inner.get_node(pane).expect("pane").children;
+                    (children[0], children[1])
+                };
+                assert_eq!(
+                    doc.inner
+                        .borrow()
+                        .get_node(content)
+                        .expect("content")
+                        .scroll_offset()
+                        .y,
+                    0.
+                );
+                let pointer = doc
+                    .inner
+                    .borrow()
+                    .get_node(rail)
+                    .expect("rail")
+                    .synthetic_click_event_data(Default::default());
+                assert_eq!(
+                    doc.inner
+                        .borrow()
+                        .get_node(rail)
+                        .expect("rail")
+                        .primary_styles()
+                        .expect("style")
+                        .clone_opacity(),
+                    0.
+                );
+                doc.handle_ui_event(UiEvent::PointerMove(pointer));
+                doc.poll(None);
+                barrier.flush();
+                assert_eq!(
+                    doc.inner
+                        .borrow()
+                        .get_node(rail)
+                        .expect("rail")
+                        .primary_styles()
+                        .expect("style")
+                        .clone_opacity(),
+                    1.
+                );
+                let thumb = doc.inner.borrow().get_node(rail).expect("rail").children[0];
+                let mut pointer = doc
+                    .inner
+                    .borrow()
+                    .get_node(thumb)
+                    .expect("thumb")
+                    .synthetic_click_event_data(Default::default());
+                pointer.button = MouseEventButton::Main;
+                doc.handle_ui_event(UiEvent::PointerDown(pointer.clone()));
+                barrier.drag_scrollbar(f64::from(pointer.coords.client_y) + 150.);
+                doc.poll(None);
+                barrier.flush();
+                let offset = doc
+                    .inner
+                    .borrow()
+                    .get_node(content)
+                    .expect("content")
+                    .scroll_offset()
+                    .y;
+                assert!(offset > 0., "{mode:?} must scroll when its thumb moves");
+                barrier.end_scrollbar_drag();
+                barrier.drag_scrollbar(f64::from(pointer.coords.client_y) + 300.);
+                assert_eq!(
+                    doc.inner
+                        .borrow()
+                        .get_node(content)
+                        .expect("content")
+                        .scroll_offset()
+                        .y,
+                    offset,
+                    "release ends dragging"
+                );
+                doc.handle_ui_event(UiEvent::PointerUp(pointer.clone()));
+                doc.handle_ui_event(UiEvent::Wheel(BlitzWheelEvent {
+                    delta: BlitzWheelDelta::Pixels(0., -50.),
+                    coords: pointer.coords,
+                    buttons: Default::default(),
+                    mods: Default::default(),
+                    element: Default::default(),
+                }));
+                let inner = doc.inner.borrow();
+                let node = inner.get_node(content).expect("content");
+                assert_eq!(
+                    node.scroll_offset().y,
+                    (offset + 200.).min(f64::from(node.final_layout().scroll_height())),
+                    "wheel still works over the rail"
+                );
+            });
+        });
+}

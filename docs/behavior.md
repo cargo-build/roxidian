@@ -51,6 +51,8 @@ colour. AGENTS.md and SKILL.md are bold with a glowing animated multicolour grad
 reduced-motion mode keeps a static gradient.
 Preview body text is 26.4px and fenced code is 23.1px (1.65 times their initial sizes).
 Heading sizes remain unchanged; the exact-source pane keeps its independent typography.
+Each document pane offers a right-edge scrollbar on pointer hover, even before
+wheel scrolling. Dragging its thumb scrolls that pane and release ends the drag.
 
 Published desktop distributions use glibc with a bundled Nix runtime definition. Static
 musl cannot load the Vulkan/windowing libraries required by this native renderer.

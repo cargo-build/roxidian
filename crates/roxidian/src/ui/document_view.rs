@@ -1,5 +1,6 @@
 //! Memoized document panes and current-document search controls.
 
+use super::scrollbar::ScrollPane;
 use super::*;
 
 #[derive(Clone)]
@@ -27,9 +28,9 @@ pub(super) fn Reader(
         false => Mode::Source,
     };
     rsx! { div { class: if mode==Mode::Split {"panes split"} else {"panes"},
-        if mode!=Mode::Preview { pre { class: "source", style: if mode==Mode::Split {format!("flex: 0 0 calc({}% - 3px)",split*100.)} else {String::new()}, tabindex: "0", aria_label: "Readonly Markdown source", {render::source(&doc.source,if mode==Mode::Source {&query} else {""},active)} } }
+        if mode!=Mode::Preview { ScrollPane { source: true, style: if mode==Mode::Split {format!("flex: 0 0 calc({}% - 3px)",split*100.)} else {String::new()}, {render::source(&doc.source,if mode==Mode::Source {&query} else {""},active)} } }
         if mode==Mode::Split { div { class: "pane-boundary", role: "separator", aria_label: "Resize source and preview panes", onpointerdown: move |event| {event.prevent_default();onresize.call(());} } }
-        if mode!=Mode::Source { section { class: "preview", tabindex: "0", aria_label: "Markdown preview", article { class: "markdown", {render::nodes(&doc.blocks,&doc.path,onlink,&query,active)} } } }
+        if mode!=Mode::Source { ScrollPane { source: false, style: String::new(), article { class: "markdown", {render::nodes(&doc.blocks,&doc.path,onlink,&query,active)} } } }
     } }
 }
 
