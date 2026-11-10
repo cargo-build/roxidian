@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")"
+binary="$root/target/release/rox"
+if [[ ! -x "$binary" ]]; then
+    echo "rox: release binary missing; run 'just build-release' in $root" >&2
+    exit 1
+fi
+exec nix develop "$root" -c nvidia-offload "$binary" "$@"

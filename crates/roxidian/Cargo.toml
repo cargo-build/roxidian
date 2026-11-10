@@ -1,0 +1,37 @@
+[package]
+name = "roxidian"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A native readonly Markdown workspace viewer built with Dioxus and Blitz"
+
+[dependencies]
+anyhow = "1"
+dioxus = { version = "0.8.0-alpha.3", default-features = false, features = ["macro", "html", "signals", "hooks", "mounted"] }
+dioxus-native = { version = "0.8.0-alpha.3", default-features = false, features = ["accessibility", "net", "html", "svg", "system-fonts", "clipboard", "vello-hybrid", "scrollbars"] }
+tokio = { version = "1", features = ["rt", "sync", "time"] }
+blitz-traits = { version = "0.3.0-beta.4", default-features = false }
+blitz-dom = { version = "0.3.0-beta.4", default-features = false }
+webbrowser = "1"
+clap = { version = "4", features = ["derive"] }
+ignore = "0.4"
+nucleo-matcher = "0.3"
+regex = "1"
+pulldown-cmark = "0.13.6"
+url = "2"
+tree-sitter = "0.27"
+tree-sitter-bash = "0.25"
+syntect = { version = "5", default-features = false, features = ["default-fancy"] }
+two-face = { version = "0.5", default-features = false, features = ["syntect-fancy"] }
+
+[[bin]]
+name = "rox"
+path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3"
+blitz-html = { version = "0.3.0-beta.4", default-features = false }
+
+[lints]
+workspace = true
