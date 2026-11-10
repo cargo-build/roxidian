@@ -31,6 +31,30 @@ button:disabled { opacity: .45; cursor: default; }
 .tree-row { height: var(--tree-row-height); min-height: var(--tree-row-height); }
 .tree-row .icon { width: 26px; flex-shrink: 0; color: var(--muted); }
 .tree-row .name { overflow: hidden; text-overflow: ellipsis; }
+.file-icon svg { display: block; width: 26px; height: 26px; }
+.tree-row.file-markdown .name, .tree-row.file-markdown .icon { color: #c7a4ff; }
+.light .tree-row.file-markdown .name, .light .tree-row.file-markdown .icon { color: #7546a8; }
+.file-rust .icon, .file-config .icon, .file-package .icon { color: #e7a16d; }
+.file-nix .icon, .file-code .icon, .file-database .icon { color: #7dc9fa; }
+.file-json .icon, .file-lock .icon, .file-guide .icon { color: #fede5d; }
+.file-yaml .icon, .file-git .icon { color: #f97eaa; }
+.file-script .icon, .file-image .icon { color: #72f1b8; }
+.file-archive .icon { color: #c7a4ff; }
+.light .file-rust .icon, .light .file-config .icon, .light .file-package .icon { color: #a04b16; }
+.light .file-nix .icon, .light .file-code .icon, .light .file-database .icon { color: #136897; }
+.light .file-json .icon, .light .file-lock .icon, .light .file-guide .icon { color: #926600; }
+.light .file-yaml .icon, .light .file-git .icon { color: #af3562; }
+.light .file-script .icon, .light .file-image .icon { color: #087049; }
+.file-guide .name { font-weight: 700; }
+.dark .file-guide { --guide-pink: #ff7edb; --guide-cyan: #36f9f6; --guide-gold: #fede5d; --guide-green: #72f1b8; }
+.light .file-guide { --guide-pink: #ac246e; --guide-cyan: #007a8c; --guide-gold: #926000; --guide-green: #087049; }
+.guide-letter { color: var(--guide-pink); animation: guide-shimmer 6s linear infinite; }
+.guide-letter:nth-child(4n+2) { color: var(--guide-cyan); }
+.guide-letter:nth-child(4n+3) { color: var(--guide-gold); }
+.guide-letter:nth-child(4n) { color: var(--guide-green); }
+.dark .guide-letter { filter: drop-shadow(0 0 1px currentColor) drop-shadow(0 0 3px #ff7edb33); }
+@keyframes guide-shimmer { 0%, 100% { color: var(--guide-pink); } 25% { color: var(--guide-cyan); } 50% { color: var(--guide-gold); } 75% { color: var(--guide-green); } }
+@media (prefers-reduced-motion: reduce) { .guide-letter { animation: none; } }
 .tree-row.folder { color: #36f9f6; font-style: italic; }
 .tree-row.folder .icon { color: #36f9f6; font-style: normal; }
 .light .tree-row.folder, .light .tree-row.folder .icon { color: #007c8a; }

@@ -496,6 +496,7 @@ pub fn run(launch: Launch, theme: Theme) {
 }
 
 mod document_view;
+mod file_icons;
 mod layout;
 mod tree;
 use layout::Mode;

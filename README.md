@@ -59,7 +59,10 @@ rules and excludes VCS/build caches and binary files. Each scan reads up to 10,0
 ## Renderer
 
 Markdown fills the reader with 5vw horizontal padding. Dark mode adds SynthWave glow;
-folders use italic cyan labels. Their ancestor chain stays visible when the tree scrolls. Fenced blocks offer Copy and Wrap. Shell highlighting
+folders use italic cyan labels. Their ancestor chain stays visible when the tree scrolls.
+Markdown filenames use violet; file types have embedded SVG icons. AGENTS.md and
+SKILL.md use a bold animated neon gradient. Wheel scrolling is 4× the native baseline.
+Fenced blocks offer Copy and Wrap. Shell highlighting
 uses syntax positions: commands are bold, positional arguments upright, flags and ENV
 names use separate colours, and flag/ENV values are italic. A bounded flag catalogue
 recognises separate values of common tools; unknown flags keep following words as
@@ -82,3 +85,5 @@ native libraries; Cargo and rustc come from rustup.
 ## License
 
 [Apache License 2.0](LICENSE).
+
+Embedded icons retain their [Lucide ISC/MIT notices](THIRD_PARTY_NOTICES.md).

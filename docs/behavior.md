@@ -28,7 +28,7 @@ text opens as readonly source. Binary files are excluded from content search.
 Each newly opened Markdown file starts in Preview. Source and Split are explicit
 per-document choices. Changing workspace root resets sidebar scroll. Folder labels use
 italic cyan text. Sidebar and split boundaries resize by dragging. Markdown uses the
-available width with 5vw horizontal padding. Wheel scrolling is twice the native baseline.
+available width with 5vw horizontal padding. Wheel scrolling is four times the native baseline.
 The dark theme adds SynthWave glow. Fenced code has syntax highlighting and copy/wrap
 controls. Shell commands (including ssh and pacman) are bold; positional arguments,
 flags, ENV names and their values use distinct styles. Commands are identified by shell
@@ -46,6 +46,9 @@ is twice its initial size (28px rows, 24px path, 20px heading and 22px hints); r
 The document path is 18px with compact padding. Native window decorations are hidden;
 small yellow/green/red controls at the toolbar's right request minimize, fullscreen
 and close. The 28px workspace toggle uses directional line/chevron icons.
+Files use embedded type-specific SVG icons. Markdown filenames have a distinct violet
+colour. AGENTS.md and SKILL.md are bold with a glowing animated multicolour gradient;
+reduced-motion mode keeps a static gradient.
 
 The implementation uses Rust 2024 and Dioxus Native with Blitz, as selected by the
 operator after evaluating GPUI. Semantic HTML elements and CSS own document typography

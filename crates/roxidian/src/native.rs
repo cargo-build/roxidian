@@ -8,6 +8,8 @@ use std::{
     time::Instant,
 };
 
+pub const WHEEL_MULTIPLIER: f64 = 4.;
+
 pub struct LayoutBarrier {
     mounted: RefCell<Option<NodeHandle>>,
     pending: Cell<bool>,
@@ -66,12 +68,15 @@ impl LayoutBarrier {
         }
     }
 
-    /// Add one native wheel delta before Blitz applies its normal delta (2x total). @req DECL0001
+    /// Add the extra distance before Blitz applies its baseline wheel delta. @req DECL0001
     pub fn accelerate_wheel(&self, delta: &dioxus_native::winit::event::MouseScrollDelta) {
         use dioxus_native::winit::event::MouseScrollDelta;
+        let extra = WHEEL_MULTIPLIER - 1.;
         let (x, y) = match delta {
-            MouseScrollDelta::LineDelta(x, y) => (f64::from(*x) * 20., f64::from(*y) * 20.),
-            MouseScrollDelta::PixelDelta(position) => (position.x, position.y),
+            MouseScrollDelta::LineDelta(x, y) => {
+                (f64::from(*x) * 20. * extra, f64::from(*y) * 20. * extra)
+            }
+            MouseScrollDelta::PixelDelta(position) => (position.x * extra, position.y * extra),
             _ => return,
         };
         if let Some(handle) = self.mounted.borrow().as_ref() {

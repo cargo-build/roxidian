@@ -45,6 +45,7 @@ fn TreeRow(
     pinned_index: Option<usize>,
     onreveal: Option<EventHandler<f64>>,
 ) -> Element {
+    let kind = file_icons::Kind::for_name(&entry.name);
     let barrier = use_context::<std::rc::Rc<crate::native::LayoutBarrier>>();
     let selected = state
         .read()
@@ -68,6 +69,11 @@ fn TreeRow(
     } else {
         class.to_owned()
     };
+    let class = if entry.directory {
+        class
+    } else {
+        format!("{class} {}", kind.class())
+    };
     let context = entry.clone();
     let target = entry.clone();
     rsx! {button {class, style:"padding-left: {10+entry.depth*15}px", title:"{entry.path.display()}",
@@ -79,8 +85,17 @@ fn TreeRow(
             event.prevent_default();event.stop_propagation();
             if context.directory {let position=event.client_coordinates();state.write().menu=Some((context.path.clone(),position.x,position.y));}
         },
-        span {class:"icon", "{icon}"} span {class:"name", "{entry.name}"}
+        if entry.directory {span {class:"icon", "{icon}"}} else {span {class:"icon file-icon",aria_hidden:true,dangerous_inner_html:kind.svg()}}
+        span {class:"name",
+            if !entry.directory && kind==file_icons::Kind::Guide {GuideName {name:entry.name.clone()}}
+            else {"{entry.name}"}
+        }
     } }
+}
+
+#[component]
+fn GuideName(name: String) -> Element {
+    rsx! {for (index,letter) in name.chars().enumerate() {span {class:"guide-letter",style:"animation-delay: {-0.45 * index as f64}s", "{letter}"}}}
 }
 
 #[cfg(test)]

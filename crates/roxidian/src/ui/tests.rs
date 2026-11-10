@@ -166,6 +166,68 @@ fn tree_pins_ancestors_and_sidebar_can_be_hidden() {
 }
 
 #[test]
+fn guide_names_animate_in_the_native_style_engine_and_files_have_svg_icons() {
+    let Harness {
+        mut doc,
+        mut state,
+        barrier,
+    } = harness();
+    doc.vdom.in_scope(ScopeId::APP, || {
+        state.write().rows = ["AGENTS.md", "SKILL.md", "README.md"]
+            .into_iter()
+            .map(|name| Entry {
+                path: PathBuf::from("/tmp").join(name),
+                name: name.into(),
+                directory: false,
+                depth: 0,
+                error: None,
+            })
+            .collect();
+    });
+    doc.poll(None);
+    barrier.flush();
+    let letters = doc
+        .inner
+        .borrow()
+        .query_selector_all(".guide-letter")
+        .expect("selector");
+    assert_eq!(letters.len(), 17);
+    assert_eq!(
+        doc.inner
+            .borrow()
+            .query_selector_all(".file-icon svg")
+            .expect("selector")
+            .len(),
+        3
+    );
+    assert_eq!(
+        doc.inner
+            .borrow()
+            .query_selector_all(".file-markdown .name")
+            .expect("selector")
+            .len(),
+        1
+    );
+    let colour = || {
+        format!(
+            "{:?}",
+            doc.inner
+                .borrow()
+                .get_node(letters[0])
+                .expect("letter")
+                .primary_styles()
+                .expect("style")
+                .clone_color()
+        )
+    };
+    doc.inner.borrow_mut().resolve(0.);
+    let before = colour();
+    doc.inner.borrow_mut().resolve(2.);
+    let after = colour();
+    assert_ne!(before, after, "guide text must actually animate in Blitz");
+}
+
+#[test]
 fn selection_copy_uses_selected_text_instead_of_the_whole_source() {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -386,7 +448,7 @@ fn pane_geometry_changes_without_changing_document_padding() {
 }
 
 #[test]
-fn accelerated_wheel_adds_one_native_delta() {
+fn accelerated_wheel_uses_the_requested_multiplier() {
     use blitz_traits::events::{BlitzWheelDelta, BlitzWheelEvent, UiEvent};
     let Harness {
         mut doc,
@@ -436,6 +498,6 @@ fn accelerated_wheel_adds_one_native_delta() {
             .expect("source node")
             .scroll_offset()
             .y,
-        100.
+        200.
     );
 }
