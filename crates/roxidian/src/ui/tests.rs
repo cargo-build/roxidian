@@ -122,7 +122,7 @@ fn tree_pins_ancestors_and_sidebar_can_be_hidden() {
         .synthetic_click_event_data(Default::default());
     doc.handle_ui_event(UiEvent::PointerMove(pointer.clone()));
     doc.handle_ui_event(UiEvent::Wheel(BlitzWheelEvent {
-        delta: BlitzWheelDelta::Pixels(0., -120.),
+        delta: BlitzWheelDelta::Pixels(0., -240.),
         coords: pointer.coords,
         buttons: Default::default(),
         mods: Default::default(),

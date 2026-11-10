@@ -40,6 +40,12 @@ Ctrl+C copies selected text, including with a non-Latin keyboard layout; Ctrl+Sh
 copies the exact document source. Ctrl+B and the toolbar toggle hide/show the workspace
 without discarding its expanded folders. Scrolling the tree pins the current branch's
 ancestor folders above its rows; each pinned folder can collapse or open as workspace.
+Hidden folder names use muted amber with a narrow dark-theme glow. All sidebar text
+is twice its initial size (28px rows, 24px path, 20px heading and 22px hints); rows are
+44px high with compact vertical padding, including pinned ancestors.
+The document path is 18px with compact padding. Native window decorations are hidden;
+small yellow/green/red controls at the toolbar's right request minimize, fullscreen
+and close. The 28px workspace toggle uses directional line/chevron icons.
 
 The implementation uses Rust 2024 and Dioxus Native with Blitz, as selected by the
 operator after evaluating GPUI. Semantic HTML elements and CSS own document typography

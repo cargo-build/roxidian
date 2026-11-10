@@ -8,27 +8,38 @@ button:hover, button:focus-visible { color: var(--text); background: var(--panel
 button.active { color: var(--accent); background: var(--panel); }
 button:disabled { opacity: .45; cursor: default; }
 .toolbar { display: flex; align-items: center; gap: 5px; padding: 10px 16px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+.workspace-toggle { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 4px; flex-shrink: 0; }
+.window-controls { display: flex; align-items: center; gap: 2px; margin-left: 10px; flex-shrink: 0; }
+.window-control { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; }
+.window-control:hover { border: 0; background: var(--panel); }
+.window-dot { width: 8px; height: 8px; border-radius: 50%; }
+.minimize .window-dot { background: #febc2e; }
+.fullscreen .window-dot { background: #28c840; }
+.close .window-dot { background: #ff5f57; }
 .brand { color: var(--accent); font-size: 19px; font-weight: 700; margin-right: 24px; }
 .dark .brand { color: #fff3fc; filter: drop-shadow(0 0 1px #ff42d7) drop-shadow(0 0 4px #ff00c84d); }
 .spacer { flex: 1; }
 .layout { display: flex; flex: 1; min-height: 0; }
-.sidebar { display: flex; flex-direction: column; width: 280px; flex-shrink: 0; background: var(--sidebar); }
-.sidebar-heading { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px 0; }
-.eyebrow { font-size: 10px; letter-spacing: 1.7px; color: var(--muted); }
-.root-path { color: var(--accent); padding: 10px 16px 16px; font-size: 12px; overflow-wrap: anywhere; }
+.sidebar { display: flex; flex-direction: column; width: 280px; flex-shrink: 0; background: var(--sidebar); font-size: 28px; }
+.sidebar-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 10px 12px 0; }
+.eyebrow { font-size: 20px; letter-spacing: 1.7px; color: var(--muted); }
+.root-path { color: var(--accent); padding: 10px 16px 8px; font-size: 24px; overflow-wrap: anywhere; }
 .tree-container { flex: 1; min-height: 0; position: relative; }
 .tree { height: 100%; overflow: auto; padding: 0 6px; }
 .tree-sticky { position: absolute; top: 0; left: 6px; right: 6px; z-index: 10; background: var(--sidebar); border-bottom: 1px solid var(--border); }
-.tree-row { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; min-height: 32px; padding: 6px 10px; color: var(--text); white-space: nowrap; }
+.tree-row { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 2px 10px; color: var(--text); white-space: nowrap; }
 .tree-row { height: var(--tree-row-height); min-height: var(--tree-row-height); }
-.tree-row .icon { width: 13px; flex-shrink: 0; color: var(--muted); }
+.tree-row .icon { width: 26px; flex-shrink: 0; color: var(--muted); }
 .tree-row .name { overflow: hidden; text-overflow: ellipsis; }
 .tree-row.folder { color: #36f9f6; font-style: italic; }
 .tree-row.folder .icon { color: #36f9f6; font-style: normal; }
 .light .tree-row.folder, .light .tree-row.folder .icon { color: #007c8a; }
-.sidebar-hint { color: var(--muted); font-size: 11px; padding: 16px; line-height: 1.6; }
+.tree-row.folder.hidden-folder, .tree-row.folder.hidden-folder .icon { color: #c9a270; }
+.dark .tree-row.hidden-folder .name { filter: drop-shadow(0 0 1px #ff9f3555); }
+.light .tree-row.folder.hidden-folder, .light .tree-row.folder.hidden-folder .icon { color: #916017; }
+.sidebar-hint { color: var(--muted); font-size: 22px; padding: 16px; line-height: 1.6; }
 .reader { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
-.document-path { font-size: 12px; color: var(--muted); padding: 12px 24px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; flex-shrink: 0; }
+.document-path { font-size: 18px; color: var(--muted); padding: 6px 16px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; flex-shrink: 0; }
 .panes { display: flex; flex: 1; min-height: 0; min-width: 0; }
 .preview, .source { flex: 1; min-width: 0; overflow: auto; }
 .pane-boundary { flex: 0 0 6px; width: 6px; cursor: col-resize; background: var(--border); user-select: none; touch-action: none; }

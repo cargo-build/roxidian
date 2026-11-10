@@ -2,7 +2,7 @@
 
 use super::*;
 
-pub(super) const ROW_HEIGHT: f64 = 32.;
+pub(super) const ROW_HEIGHT: f64 = 44.;
 
 fn pinned_indices(rows: &[Entry], scroll: f64) -> Vec<usize> {
     let Some(first) = rows.get((scroll.max(0.) / ROW_HEIGHT) as usize) else {
@@ -63,6 +63,11 @@ fn TreeRow(
         (false, true) => "tree-row active",
         _ => "tree-row",
     };
+    let class = if entry.directory && entry.name.starts_with('.') {
+        format!("{class} hidden-folder")
+    } else {
+        class.to_owned()
+    };
     let context = entry.clone();
     let target = entry.clone();
     rsx! {button {class, style:"padding-left: {10+entry.depth*15}px", title:"{entry.path.display()}",
@@ -100,8 +105,8 @@ mod tests {
         })
         .collect::<Vec<_>>();
         assert!(pinned_indices(&rows, 0.).is_empty());
-        assert_eq!(pinned_indices(&rows, 64.), vec![0, 1]);
-        assert_eq!(pinned_indices(&rows, 128.), vec![3]);
+        assert_eq!(pinned_indices(&rows, ROW_HEIGHT * 2.), vec![0, 1]);
+        assert_eq!(pinned_indices(&rows, ROW_HEIGHT * 4.), vec![3]);
         assert!(pinned_indices(&rows, 999.).is_empty());
     }
 }

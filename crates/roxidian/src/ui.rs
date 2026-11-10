@@ -43,6 +43,13 @@ enum SearchPanel {
     Workspace,
 }
 
+#[derive(Clone, Copy)]
+enum WindowAction {
+    Minimize,
+    Fullscreen,
+    Close,
+}
+
 impl State {
     fn new(launch: &Launch, theme: Theme, mode: Mode) -> Self {
         Self {
@@ -287,6 +294,8 @@ fn app() -> Element {
         ))
     });
     let window = dioxus_native::use_window();
+    let chrome_window = window.clone();
+    let chrome_shell = use_context::<Arc<dyn blitz_traits::shell::ShellProvider>>();
     dioxus_native::use_window_event(move |event, target| {
         use dioxus_native::winit::{
             event::{ElementState, WindowEvent},
@@ -373,11 +382,15 @@ fn app() -> Element {
             _ => {}
         }
     });
-    rsx! { Shell {state} }
+    rsx! { Shell {state, onwindow:move |action|match action {
+        WindowAction::Close=>chrome_shell.request_window_close(),
+        WindowAction::Minimize=>chrome_window.set_minimized(true),
+        WindowAction::Fullscreen=>{let screen=match chrome_window.fullscreen(){Some(_)=>None,None=>Some(dioxus_native::winit::monitor::Fullscreen::Borderless(None))};chrome_window.set_fullscreen(screen);}
+    }} }
 }
 
 #[component]
-fn Shell(mut state: Signal<State>) -> Element {
+fn Shell(mut state: Signal<State>, onwindow: Option<EventHandler<WindowAction>>) -> Element {
     let barrier = crate::native::use_layout_barrier();
     let snapshot = state.read();
     let document = snapshot.document.clone();
@@ -400,8 +413,12 @@ fn Shell(mut state: Signal<State>) -> Element {
             onmounted: move |event| barrier.mount(event),
             onclick: move |_| {if state.peek().menu.is_some() {state.write().menu=None;}},
             header { class: "toolbar",
-                button { title: "Toggle workspace (Ctrl+B)", aria_label: "Toggle workspace", aria_expanded: snapshot.layout.sidebar_visible,
-                    onclick: move |_| {let visible=state.peek().layout.sidebar_visible;state.write().layout.sidebar_visible = !visible;}, "☰" }
+                button { class:"workspace-toggle", title: "Toggle workspace (Ctrl+B)", aria_label: "Toggle workspace", aria_expanded: snapshot.layout.sidebar_visible,
+                    onclick: move |_| {let visible=state.peek().layout.sidebar_visible;state.write().layout.sidebar_visible = !visible;},
+                    svg {width:"28",height:"28",view_box:"0 0 24 24",fill:"none",stroke:"currentColor",stroke_width:"1.8",stroke_linecap:"round",stroke_linejoin:"round",
+                        path {d:if snapshot.layout.sidebar_visible {"M3 6h10M3 12h7M3 18h10M20 8l-4 4 4 4"} else {"M11 6h10M14 12h7M11 18h10M4 8l4 4-4 4"}}
+                    }
+                }
                 span { class: "brand", "◈ roxidian" }
                 button { class: if mode==Mode::Preview {"active"} else {""}, disabled: source_only, onclick: move |_| set_mode(state,Mode::Preview), "Preview" }
                 button { class: if mode==Mode::Source {"active"} else {""}, onclick: move |_| set_mode(state,Mode::Source), "Source" }
@@ -412,6 +429,11 @@ fn Shell(mut state: Signal<State>) -> Element {
                 button { onclick: move |_| copy(state), disabled: document.is_none(), "Copy source" }
                 button { onclick: move |_| reload(state), "↻ Reload" }
                 button { onclick: move |_| state.write().theme=theme.toggle(), "{theme.name()}" }
+                div {class:"window-controls",
+                    button {class:"window-control minimize",title:"Minimize",aria_label:"Minimize",onclick:move |_|{if let Some(action)=onwindow {action.call(WindowAction::Minimize);}},span {class:"window-dot"}}
+                    button {class:"window-control fullscreen",title:"Toggle full screen",aria_label:"Toggle full screen",onclick:move |_|{if let Some(action)=onwindow {action.call(WindowAction::Fullscreen);}},span {class:"window-dot"}}
+                    button {class:"window-control close",title:"Close",aria_label:"Close",onclick:move |_|{if let Some(action)=onwindow {action.call(WindowAction::Close);}},span {class:"window-dot"}}
+                }
             }
             if let Some(error)=&snapshot.file_error { div { class: "banner error", "{error}" } }
             if let Some(error)=&snapshot.tree_error { div { class: "banner error", "{error}" } }
@@ -455,6 +477,7 @@ fn Shell(mut state: Signal<State>) -> Element {
 pub fn run(launch: Launch, theme: Theme) {
     let attributes = dioxus_native::WindowAttributes::default()
         .with_title("roxidian")
+        .with_decorations(false)
         .with_surface_size(dioxus_native::LogicalSize::new(1440., 960.))
         .with_min_surface_size(dioxus_native::LogicalSize::new(820., 480.));
     #[cfg(target_os = "linux")]
