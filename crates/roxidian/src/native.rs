@@ -124,8 +124,15 @@ impl LayoutBarrier {
         }
     }
 
-    pub fn cancel_scrollbar_drag(&self) {
-        self.scrollbar_drag.borrow_mut().take();
+    pub fn cancel_scrollbar_drag(&self, handle: &NodeHandle) {
+        let owns_drag = self
+            .scrollbar_drag
+            .borrow()
+            .as_ref()
+            .is_some_and(|drag| drag.handle.node_id() == handle.node_id());
+        if owns_drag {
+            self.scrollbar_drag.borrow_mut().take();
+        }
     }
 
     pub fn selected_text(&self) -> Option<String> {

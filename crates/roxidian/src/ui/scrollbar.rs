@@ -27,7 +27,11 @@ pub(super) fn ScrollPane(source: bool, style: String, children: Element) -> Elem
         }
     };
     let cleanup = barrier.clone();
-    use_drop(move || cleanup.cancel_scrollbar_drag());
+    use_drop(move || {
+        if let Some(node) = handle.peek().as_ref() {
+            cleanup.cancel_scrollbar_drag(node);
+        }
+    });
     let geometry = metrics();
     let rail = match dragging() {
         true => "scrollbar-rail dragging",
