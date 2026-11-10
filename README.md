@@ -11,6 +11,13 @@ The dark palette takes its colors from Robb Owen's
 
 ## Launch
 
+Release archives are available from [GitHub Releases](https://github.com/cargo-build/roxidian/releases).
+The x86_64 NixOS/glibc bundle installs with `./install.sh` into
+`~/.local/roxidian/<version>/`; it includes its own Nix runtime definition and needs no
+source checkout. Static musl cannot load this renderer's GPU/windowing libraries.
+
+Build and install from a source checkout:
+
 ```sh
 nix develop -c just build-release
 nix develop -c just install
@@ -24,7 +31,9 @@ rox --theme light ./README.md
 A **directory argument** becomes the workspace. A **file argument** opens that file
 while preserving the terminal's current directory as workspace, including files outside
 it. No argument opens the current directory. The installed launcher loads this project's
-flake without changing that directory and runs the release binary through NVIDIA offload.
+bundled runtime flake without changing that directory. NVIDIA offload is used when
+the host provides it. `just install` creates the versioned package; `scripts/rox`
+remains available for source-development builds.
 
 Documents are never written. Non-Markdown text files open as source. Raw HTML remains
 literal text. UTF-8 files up to 16 MiB are accepted; binary input produces an error.

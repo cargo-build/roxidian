@@ -25,8 +25,10 @@ fmt-check:
 clippy:
     cargo clippy --workspace --all-targets -j 2 -- -D warnings
 
-install:
-    mkdir -p "$HOME/.local/bin"
-    ln -sfn "{{justfile_directory()}}/scripts/rox" "$HOME/.local/bin/rox"
+package: build-release
+    python3 scripts/package-release.py
+
+install: build-release
+    python3 scripts/package-release.py --install
 
 gate: fmt-check clippy test

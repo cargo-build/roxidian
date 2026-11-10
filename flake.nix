@@ -14,6 +14,8 @@
         # Runtime libraries for a Rust GUI application: Wayland/X11 windowing,
         # GPU (Vulkan/GL), fonts, audio, TLS and the *-sys crates.
         libraries = with pkgs; [
+          glibc
+          stdenv.cc.cc.lib
           alsa-lib
           fontconfig
           freetype
@@ -52,6 +54,12 @@
           shellHook = ''
             echo "[roxidian] devShell ready - rustup toolchain, GUI libraries, just"
           '';
+        };
+
+        devShells.runtime = pkgs.mkShellNoCC {
+          name = "roxidian-runtime";
+          packages = libraries;
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libraries;
         };
 
         formatter = pkgs.nixfmt-rfc-style;

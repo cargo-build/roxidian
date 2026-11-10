@@ -52,6 +52,11 @@ reduced-motion mode keeps a static gradient.
 Preview body text is 26.4px and fenced code is 23.1px (1.65 times their initial sizes).
 Heading sizes remain unchanged; the exact-source pane keeps its independent typography.
 
+Published desktop distributions use glibc with a bundled Nix runtime definition. Static
+musl cannot load the Vulkan/windowing libraries required by this native renderer.
+Versioned local installation lives in ~/.local/roxidian/<version>; the rox command
+selects the current installed version while preserving the caller's working directory.
+
 The implementation uses Rust 2024 and Dioxus Native with Blitz, as selected by the
 operator after evaluating GPUI. Semantic HTML elements and CSS own document typography
 and both palettes; no browser or WebView is required.
