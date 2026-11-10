@@ -49,6 +49,8 @@ and close. The 28px workspace toggle uses directional line/chevron icons.
 Files use embedded type-specific SVG icons. Markdown filenames have a distinct violet
 colour. AGENTS.md and SKILL.md are bold with a glowing animated multicolour gradient;
 reduced-motion mode keeps a static gradient.
+Preview body text is 26.4px and fenced code is 23.1px (1.65 times their initial sizes).
+Heading sizes remain unchanged; the exact-source pane keeps its independent typography.
 
 The implementation uses Rust 2024 and Dioxus Native with Blitz, as selected by the
 operator after evaluating GPUI. Semantic HTML elements and CSS own document typography
