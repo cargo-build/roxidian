@@ -30,6 +30,67 @@ struct Harness {
     barrier: Rc<crate::native::LayoutBarrier>,
 }
 
+#[test]
+fn standalone_source_shows_syntax_and_search_matches() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path = directory.path().join("main.rs");
+    std::fs::write(&path, "fn main() { let value = 42; }\n").expect("source fixture");
+    let Harness {
+        mut doc,
+        mut state,
+        barrier,
+    } = harness();
+    doc.vdom.in_scope(ScopeId::APP, || {
+        let mut state = state.write();
+        state.mode = Mode::Source;
+        state.document = Some(Arc::new(Document::load(&path).expect("source document")));
+    });
+    doc.poll(None);
+    barrier.flush();
+    assert!(
+        !doc.inner
+            .borrow()
+            .query_selector_all("pre.source .syn-keyword")
+            .expect("selector")
+            .is_empty()
+    );
+    doc.vdom
+        .in_scope(ScopeId::APP, || state.write().find_query = "value".into());
+    doc.poll(None);
+    barrier.flush();
+    assert_eq!(
+        doc.inner
+            .borrow()
+            .query_selector_all("pre.source mark")
+            .expect("selector")
+            .len(),
+        1
+    );
+    assert!(
+        !doc.inner
+            .borrow()
+            .query_selector_all("pre.source .syn-keyword")
+            .expect("selector")
+            .is_empty()
+    );
+    doc.vdom
+        .in_scope(ScopeId::APP, || state.write().find_query = "fn main".into());
+    doc.poll(None);
+    barrier.flush();
+    assert!(
+        doc.inner
+            .borrow()
+            .query_selector_all("pre.source mark")
+            .expect("selector")
+            .len()
+            >= 2
+    );
+    assert_eq!(
+        state.peek().document.as_ref().expect("document").source,
+        "fn main() { let value = 42; }\n"
+    );
+}
+
 fn harness() -> Harness {
     fn fixture() -> Element {
         let slot = use_context::<Rc<Cell<Option<Signal<State>>>>>();
@@ -462,6 +523,8 @@ fn accelerated_wheel_uses_the_requested_multiplier() {
         state.document = Some(Arc::new(Document {
             path: PathBuf::from("/tmp/test.md"),
             source,
+            source_syntax: None,
+            source_html: None,
             lines: 250,
             blocks: Vec::new(),
         }));

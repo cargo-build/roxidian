@@ -40,7 +40,7 @@ pub(super) fn ScrollPane(source: bool, style: String, children: Element) -> Elem
     rsx! {
         div { class: "document-pane", style,
             if source {
-                pre { class: "source", tabindex: "0", aria_label: "Readonly Markdown source",
+                pre { class: "source", tabindex: "0", aria_label: "Readonly source",
                     onmounted: mounted, onscroll: move |_| sync.call(*dragging.peek()), {children} }
             } else {
                 section { class: "preview", tabindex: "0", aria_label: "Markdown preview",

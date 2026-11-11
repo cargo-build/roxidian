@@ -24,6 +24,8 @@ Ctrl+F searches the current rendered document. Ctrl+Shift+F performs fuzzy searc
 workspace text files, including Markdown, TOML, source code and configuration files.
 Results identify the file and matching text and open the selected file. Non-Markdown
 text opens as readonly source. Binary files are excluded from content search.
+Standalone source and configuration files use syntax highlighting where a grammar
+is available. Search and clipboard actions continue to use the exact source text.
 
 Each newly opened Markdown file starts in Preview. Source and Split are explicit
 per-document choices. Changing workspace root resets sidebar scroll. Folder labels use

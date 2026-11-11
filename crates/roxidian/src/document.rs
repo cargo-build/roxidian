@@ -27,6 +27,8 @@ pub enum Node {
 pub struct Document {
     pub path: PathBuf,
     pub source: String,
+    pub source_syntax: Option<crate::syntax::Markup>,
+    pub source_html: Option<String>,
     pub lines: usize,
     pub blocks: Vec<Node>,
 }
@@ -53,10 +55,23 @@ impl Document {
             true => parse(&source),
             false => Vec::new(),
         };
+        let source_syntax = match crate::workspace::is_markdown(&path) {
+            true => None,
+            false => match crate::syntax::highlight_file(&source, &path) {
+                Ok(html) => html,
+                Err(error) => {
+                    eprintln!("rox: highlight {}: {error:#}", path.display());
+                    None
+                }
+            },
+        };
+        let source_html = source_syntax.as_ref().map(|syntax| syntax.render(&source));
         let lines = source.lines().count();
         Ok(Self {
             path,
             source,
+            source_syntax,
+            source_html,
             lines,
             blocks,
         })

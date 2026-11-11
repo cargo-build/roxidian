@@ -35,7 +35,8 @@ runtime. The launcher uses those libraries directly. NVIDIA offload is used when
 the host provides it. `just install` creates the versioned package; `scripts/rox`
 remains available for source-development builds.
 
-Documents are never written. Non-Markdown text files open as source. Raw HTML remains
+Documents are never written. Non-Markdown text files open as source, with syntax
+highlighting for recognized languages and configuration formats. Raw HTML remains
 literal text. UTF-8 files up to 16 MiB are accepted; binary input produces an error.
 Every newly opened Markdown document starts in Preview. Source and Split are explicit
 choices for the current document. Drag the sidebar or split boundary to resize panes.

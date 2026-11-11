@@ -587,10 +587,37 @@ impl Class {
 /// text is not an error: it is highlighted as far as the parsers recover.
 pub fn highlight(source: &str, language: &str) -> Result<String> {
     let token = language_token(language);
+    let markup = match SHELL_TOKENS.contains(&token.as_str()) {
+        true => highlight_shell(source),
+        false => highlight_general(source, &token),
+    }?;
+    Ok(markup.render(source))
+}
+
+/// Select a grammar using the filename and extension of a standalone file. @req DECL0001
+pub fn highlight_file(source: &str, path: &std::path::Path) -> Result<Option<Markup>> {
+    let language = match path.file_name().and_then(|name| name.to_str()) {
+        Some("flake.lock") => "json",
+        Some("Cargo.lock") => "toml",
+        Some(".env" | ".envrc") => "bash",
+        Some("justfile" | "Justfile" | "Makefile") => "makefile",
+        Some("Dockerfile") => "dockerfile",
+        _ => {
+            let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
+                return Ok(None);
+            };
+            extension
+        }
+    };
+    let token = language_token(language);
+    if !SHELL_TOKENS.contains(&token.as_str()) && lookup_syntax(syntax_set(), &token).is_none() {
+        return Ok(None);
+    }
     match SHELL_TOKENS.contains(&token.as_str()) {
         true => highlight_shell(source),
         false => highlight_general(source, &token),
     }
+    .map(Some)
 }
 
 /// Reduces a fence info string to its lowercase language token.
@@ -607,18 +634,31 @@ fn language_token(language: &str) -> String {
 }
 
 /// Ordered, non-overlapping HTML segments over one source text.
-#[derive(Default)]
-struct Markup {
+#[derive(Debug, Default)]
+pub struct Markup {
     segments: Vec<Segment>,
 }
 
 /// One styled byte range of the highlighted source.
+#[derive(Debug)]
 struct Segment {
     range: Range<usize>,
     class: Class,
 }
 
 impl Markup {
+    pub fn spans<'a>(
+        &'a self,
+        source: &'a str,
+    ) -> impl Iterator<Item = (Range<usize>, &'static str)> + 'a {
+        self.segments.iter().map(move |segment| {
+            (
+                floor_char_boundary(source, segment.range.start)
+                    ..floor_char_boundary(source, segment.range.end),
+                segment.class.name(),
+            )
+        })
+    }
     /// Marks `range` with `class`, merging with an adjacent identical segment.
     fn mark(&mut self, range: Range<usize>, class: Class) {
         if range.start >= range.end {
@@ -635,7 +675,7 @@ impl Markup {
     }
 
     /// Renders the segments, escaping every byte of `source` exactly once.
-    fn render(&self, source: &str) -> String {
+    pub fn render(&self, source: &str) -> String {
         let mut out = String::with_capacity(source.len() + self.segments.len() * 32);
         let mut cursor = 0;
         for segment in &self.segments {
@@ -698,11 +738,11 @@ fn node_range(node: Node<'_>) -> Range<usize> {
 }
 
 /// Highlights a shell fence through the bash grammar.
-fn highlight_shell(source: &str) -> Result<String> {
+fn highlight_shell(source: &str) -> Result<Markup> {
     let mut parser = bash_parser()?;
     let mut markup = Markup::default();
     shell_into(source, 0, 0, &mut parser, &mut markup)?;
-    Ok(markup.render(source))
+    Ok(markup)
 }
 
 /// Builds the bash parser once per shell fence, including nested heredocs.
@@ -1081,10 +1121,10 @@ fn syntax_set() -> &'static SyntaxSet {
 }
 
 /// Highlights a non-shell fence, falling back to escaped plain text.
-fn highlight_general(source: &str, token: &str) -> Result<String> {
+fn highlight_general(source: &str, token: &str) -> Result<Markup> {
     let syntaxes = syntax_set();
     let Some(syntax) = lookup_syntax(syntaxes, token) else {
-        return Ok(Markup::default().render(source));
+        return Ok(Markup::default());
     };
     let mut parse_state = ParseState::new(syntax);
     let mut stack = ScopeStack::new();
@@ -1105,7 +1145,7 @@ fn highlight_general(source: &str, token: &str) -> Result<String> {
         )?;
         offset += line.len();
     }
-    Ok(markup.render(source))
+    Ok(markup)
 }
 
 /// Finds the grammar for a fence token, following [`LANGUAGE_ALIASES`].

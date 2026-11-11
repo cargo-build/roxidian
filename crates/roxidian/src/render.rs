@@ -26,11 +26,19 @@ fn CodeBlock(language: String, source: String, children: Element) -> Element {
 
 impl Highlights {
     fn text(&mut self, text: &str) -> Element {
+        if text.is_empty() {
+            return rsx! { "" };
+        }
         let start = self.offset;
         self.offset += text.len();
         let mut cursor = 0;
         let mut pieces = Vec::new();
-        self.ranges.iter().enumerate().filter(|(_,range)|range.start<self.offset && range.end>start).for_each(|(index,range)| {
+        let first = self.ranges.partition_point(|range| range.end <= start);
+        let last = self
+            .ranges
+            .partition_point(|range| range.start < self.offset);
+        self.ranges[first..last].iter().enumerate().for_each(|(relative,range)| {
+            let index = first + relative;
             let left=range.start.saturating_sub(start);let right=(range.end-start).min(text.len());
             let prefix=&text[cursor..left];let value=&text[left..right];let active=index==self.active;
             pieces.push(rsx! { Fragment { key: "{index}-{start}-{active}", "{prefix}" mark { class: if active {"current-match"} else {""},
@@ -59,13 +67,40 @@ pub fn nodes(
     walk(nodes, path, follow, &mut highlights, false)
 }
 
-pub fn source(text: &str, query: &str, active: usize) -> Element {
-    Highlights {
+pub fn source(
+    text: &str,
+    syntax: Option<&crate::syntax::Markup>,
+    html: Option<&str>,
+    query: &str,
+    active: usize,
+) -> Element {
+    let mut highlights = Highlights {
         ranges: crate::search::occurrences(text, query),
         offset: 0,
         active,
+    };
+    if highlights.ranges.is_empty()
+        && let Some(html) = html
+    {
+        return rsx! { span { dangerous_inner_html: html.to_owned() } };
     }
-    .text(text)
+    let Some(syntax) = syntax else {
+        return highlights.text(text);
+    };
+    let mut parts = Vec::new();
+    let mut cursor = 0;
+    for (range, class) in syntax.spans(text) {
+        let start = range.start.max(cursor);
+        if start >= range.end {
+            continue;
+        }
+        let prefix = highlights.text(&text[cursor..start]);
+        let styled = highlights.text(&text[start..range.end]);
+        parts.push(rsx! { Fragment { key: "{start}", {prefix} span { class, {styled} } } });
+        cursor = range.end;
+    }
+    let suffix = highlights.text(&text[cursor..]);
+    rsx! { {parts.into_iter()} {suffix} }
 }
 use std::path::Path;
 

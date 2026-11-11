@@ -10,6 +10,35 @@ use anyhow::Result;
 use std::{collections::HashSet, fs};
 
 #[test]
+fn standalone_files_use_filename_grammars_without_changing_source() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    for (name, source) in [
+        ("main.rs", "fn main() { println!(\"<script>\"); }\n"),
+        ("Cargo.toml", "[package]\nname = \"rox\"\n"),
+        ("flake.nix", "{ pkgs }: { enabled = true; }\n"),
+        ("install.sh", "pacman -S ssh curl\n"),
+        ("flake.lock", "{\"version\": 7}\n"),
+    ] {
+        let path = directory.path().join(name);
+        fs::write(&path, source)?;
+        let document = Document::load(&path)?;
+        assert_eq!(document.source, source, "{name}");
+        let html = document
+            .source_syntax
+            .expect("highlighted source")
+            .render(source);
+        assert!(html.contains("class=\"syn-"), "{name}: {html}");
+        assert!(!html.contains("<script>"), "{name}: {html}");
+    }
+    let path = directory.path().join("unknown.unsupported");
+    fs::write(&path, "<script>&</script>")?;
+    let document = Document::load(&path)?;
+    assert!(document.source_syntax.is_none());
+    assert_eq!(document.source, "<script>&</script>");
+    Ok(())
+}
+
+#[test]
 fn soft_wrapped_markdown_flows_while_explicit_breaks_remain() {
     let blocks = document::parse("one soft\nwrapped paragraph  \nhard break");
     assert_eq!(
