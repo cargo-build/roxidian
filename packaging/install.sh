@@ -35,6 +35,17 @@ else
     mv -T -- "$staging" "$destination"
     trap - EXIT
 fi
+(cd "$destination/runtime" && nix build --no-write-lock-file --out-link "$destination/.runtime" 'path:.#runtime')
+if [[ ! -s "$destination/.runtime/library-path" ]]; then
+    echo "roxidian: prepared runtime has no library path" >&2
+    exit 1
+fi
+installed_version="$("$destination/scripts/rox" --version)"
+if [[ "$installed_version" != "rox $version" ]]; then
+    echo "roxidian: installed executable reports an unexpected version: $installed_version" >&2
+    exit 1
+fi
+
 link_stage=''
 trap 'if [[ -n "$link_stage" ]]; then rm -r -- "$link_stage"; fi' EXIT
 activate() {

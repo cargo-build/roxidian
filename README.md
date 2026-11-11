@@ -30,8 +30,8 @@ rox --theme light ./README.md
 
 A **directory argument** becomes the workspace. A **file argument** opens that file
 while preserving the terminal's current directory as workspace, including files outside
-it. No argument opens the current directory. The installed launcher loads this project's
-bundled runtime flake without changing that directory. NVIDIA offload is used when
+it. No argument opens the current directory. Installation prepares the bundled Nix
+runtime. The launcher uses those libraries directly. NVIDIA offload is used when
 the host provides it. `just install` creates the versioned package; `scripts/rox`
 remains available for source-development builds.
 

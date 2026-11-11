@@ -37,8 +37,11 @@
           zlib
           zstd
         ];
+        libraryPath = pkgs.lib.makeLibraryPath libraries;
       in
       {
+        packages.runtime = pkgs.writeTextDir "library-path" (libraryPath + "\n");
+
         devShells.default = pkgs.mkShell {
           name = "roxidian";
 
@@ -48,7 +51,7 @@
 
           buildInputs = libraries;
 
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libraries;
+          LD_LIBRARY_PATH = libraryPath;
           PKG_CONFIG_PATH = pkgs.lib.makeSearchPathOutput "dev" "lib/pkgconfig" libraries;
 
           shellHook = ''
@@ -59,7 +62,7 @@
         devShells.runtime = pkgs.mkShellNoCC {
           name = "roxidian-runtime";
           packages = libraries;
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libraries;
+          LD_LIBRARY_PATH = libraryPath;
         };
 
         formatter = pkgs.nixfmt-rfc-style;

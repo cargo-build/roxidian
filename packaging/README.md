@@ -23,9 +23,11 @@ For a separate prefix, set ROXIDIAN_INSTALL_ROOT and ROXIDIAN_BIN_DIR before inv
 install.sh. Relative prefixes resolve from invocation CWD. Each prefix can select
 its current version independently; simultaneous installs into one root serialize.
 
-The launcher preserves invocation CWD and uses the bundled runtime flake. NVIDIA
-offload is selected when the host provides nvidia-offload. The first launch may
-fetch the runtime through Nix. It does not need the source checkout or Rust tools.
+Installation resolves the bundled Nix runtime before activating the version.
+The .runtime symlink keeps those libraries reachable during Nix garbage collection.
+The launcher uses the prepared libraries directly and preserves invocation CWD.
+It selects NVIDIA offload when the host provides nvidia-offload. Running install.sh
+again refreshes the runtime link. Launching from an unpacked archive uses its flake.
 
 VERSION and release.json identify the package and source; SHA256SUMS verifies all
 distributed files. LICENSE contains Apache-2.0; THIRD_PARTY_NOTICES.md and the icon

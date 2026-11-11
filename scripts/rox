@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")"
+script="$(readlink -f -- "${BASH_SOURCE[0]}")"
+directory="${script%/*}"
+root="${directory%/*}"
 url_path() {
     local LC_ALL=C value="$1" encoded='' character escaped index
     for ((index = 0; index < ${#value}; index++)); do
@@ -14,19 +16,21 @@ url_path() {
 }
 if [[ -f "$root/VERSION" ]]; then
     binary="$root/bin/rox"
-    runtime="path:$(url_path "$root/runtime")#runtime"
+    runtime="$root/runtime"
 else
     binary="$root/target/release/rox"
-    runtime="path:$(url_path "$root")#runtime"
+    runtime="$root"
 fi
 if [[ ! -x "$binary" ]]; then
     echo "rox: executable missing: $binary; rebuild or reinstall this distribution" >&2
     exit 1
 fi
-if [[ "${ROXIDIAN_RUNTIME_ROOT:-}" != "$root" ]]; then
-    exec nix develop "$runtime" --no-write-lock-file -c env "ROXIDIAN_RUNTIME_ROOT=$root" "$root/scripts/rox" "$@"
-fi
+launch=("$binary" "$@")
 if command -v nvidia-offload >/dev/null 2>&1; then
-    exec nvidia-offload "$binary" "$@"
+    launch=(nvidia-offload "${launch[@]}")
 fi
-exec "$binary" "$@"
+if [[ -r "$root/.runtime/library-path" ]] && IFS= read -r libraries < "$root/.runtime/library-path" && [[ -n "$libraries" ]]; then
+    export LD_LIBRARY_PATH="$libraries"
+    exec "${launch[@]}"
+fi
+exec nix develop "path:$(url_path "$runtime")#runtime" --no-write-lock-file -c "${launch[@]}"

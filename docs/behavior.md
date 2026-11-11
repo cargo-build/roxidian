@@ -58,6 +58,8 @@ Published desktop distributions use glibc with a bundled Nix runtime definition.
 musl cannot load the Vulkan/windowing libraries required by this native renderer.
 Versioned local installation lives in ~/.local/roxidian/<version>; the rox command
 selects the current installed version while preserving the caller's working directory.
+Installation prepares the Nix library closure for that version. Installed launches
+use it directly and keep the caller's arguments and GPU offload behavior.
 
 The implementation uses Rust 2024 and Dioxus Native with Blitz, as selected by the
 operator after evaluating GPUI. Semantic HTML elements and CSS own document typography
