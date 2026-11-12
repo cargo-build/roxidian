@@ -52,7 +52,13 @@ flag and ENV values are italic. Comments are muted italic text.
 Ordinary Markdown line endings flow as spaces; explicit hard breaks remain line breaks.
 Ctrl+C copies selected text, including with a non-Latin keyboard layout, and copies
 the whole document source when nothing is selected; Ctrl+Shift+C
-copies the exact document source. Ctrl+B and the toolbar toggle hide/show the workspace
+copies the exact document source. Ctrl+A selects all rendered text of the reader
+panes; a second press within 600 ms copies the word under the mouse pointer and a
+third copies the paragraph or block under it (a code block copies whole); the count
+restarts after a triple press or a longer pause. Ctrl+L copies the document path
+shown in the path bar. Hovering a link shows its resolved target — local file path,
+external URL or path#anchor — in a strip at the window's bottom-left corner.
+Ctrl+B and the toolbar toggle hide/show the workspace
 without discarding its expanded folders. Scrolling the tree pins the current branch's
 ancestor folders above its rows; each pinned folder can collapse or open as workspace.
 Hidden folder names use muted amber with a narrow dark-theme glow. All sidebar text

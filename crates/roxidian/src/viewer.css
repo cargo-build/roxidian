@@ -144,6 +144,7 @@ button:disabled { opacity: .45; cursor: default; }
 .context-menu { position: fixed; z-index: 50; width: 250px; padding: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 22px #0006; }
 .context-menu button { display: block; width: 100%; text-align: left; color: var(--accent); }
 .context-path { padding: 8px 12px; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.hover-target { position: fixed; left: 0; bottom: 0; z-index: 40; max-width: 75vw; padding: 4px 10px; background: var(--panel); border: 1px solid var(--border); border-left: 0; border-bottom: 0; border-radius: 0 6px 0 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; user-select: none; }
 @media (max-width: 1000px) { .brand { margin-right: 8px; } button { padding: 8px; } }
 .toolbar { flex-wrap: wrap; }
 .find-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }

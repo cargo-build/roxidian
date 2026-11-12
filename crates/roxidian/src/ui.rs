@@ -43,6 +43,9 @@ struct State {
     history: Vec<HistoryEntry>,
     history_index: usize,
     watch: Option<watch::Watch>,
+    pointer: Option<(f64, f64)>,
+    hover_target: Option<String>,
+    select_all: bool,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -94,6 +97,9 @@ impl State {
             history: Vec::new(),
             history_index: 0,
             watch: None,
+            pointer: None,
+            hover_target: None,
+            select_all: false,
         }
     }
 }
@@ -152,6 +158,8 @@ fn open(mut state: Signal<State>, path: PathBuf, mode: Option<Mode>) {
         state.loading = true;
         state.file_error = None;
         state.notice = None;
+        state.hover_target = None;
+        state.select_all = false;
         (state.worker.clone(), state.file_generation)
     };
     let task = spawn(async move {
@@ -394,6 +402,7 @@ fn set_mode(mut state: Signal<State>, mode: Mode) {
         let mut state = state.write();
         state.mode = mode;
         state.find_index = 0;
+        state.select_all = false;
     }
 }
 
@@ -426,10 +435,61 @@ fn copy_shortcut(
 ) {
     if shift {
         copy(state);
+    } else if state.peek().select_all {
+        if let Some(text) = barrier.all_text() {
+            copy_text(state, text, "Selection copied");
+        }
     } else if let Some(text) = barrier.selected_text() {
         copy_text(state, text, "Selection copied");
     } else {
         copy(state);
+    }
+}
+
+/// Ctrl+L: copy the document path shown in the path bar.
+fn copy_path(state: Signal<State>) {
+    let path = state
+        .read()
+        .document
+        .as_ref()
+        .map(|document| document.path.display().to_string());
+    if let Some(path) = path {
+        copy_text(state, path, "Path copied");
+    }
+}
+
+const SELECT_TAP_WINDOW: std::time::Duration = std::time::Duration::from_millis(600);
+
+/// Ctrl+A ladder: first tap selects all rendered text, second copies the word
+/// under the pointer, third copies its block; a triple or a pause restarts.
+fn select_shortcut(
+    mut state: Signal<State>,
+    barrier: &std::rc::Rc<crate::native::LayoutBarrier>,
+    taps: &std::cell::Cell<(u32, std::time::Instant)>,
+) {
+    let now = std::time::Instant::now();
+    let (count, last) = taps.get();
+    let count = match count {
+        0 | 3 => 1,
+        _ if now.duration_since(last) > SELECT_TAP_WINDOW => 1,
+        count => count + 1,
+    };
+    taps.set((count, now));
+    let point = state.peek().pointer;
+    match count {
+        1 => {
+            state.write().select_all = barrier.select_all_text();
+        }
+        2 => {
+            if let Some(word) = point.and_then(|(x, y)| barrier.word_at_pointer(x, y)) {
+                copy_text(state, word, "Word copied");
+            }
+        }
+        _ => {
+            if let Some(block) = point.and_then(|(x, y)| barrier.block_at_pointer(x, y)) {
+                copy_text(state, block, "Line copied");
+            }
+        }
     }
 }
 
@@ -460,6 +520,31 @@ fn follow(mut state: Signal<State>, href: String) {
         Some(Ok(Destination::Anchor(_))) => {}
         Some(Err(error)) => state.write().file_error = Some(format!("{error:#}")),
         None => {}
+    }
+}
+
+/// Resolve the link under the pointer for the status strip; write only on change.
+fn update_hover(
+    mut state: Signal<State>,
+    barrier: &std::rc::Rc<crate::native::LayoutBarrier>,
+    point: Option<(f64, f64)>,
+) {
+    let target = point
+        .and_then(|(x, y)| barrier.link_at_pointer(x, y))
+        .and_then(|href| hover_target(&state.peek(), &href));
+    if state.peek().hover_target != target {
+        state.write().hover_target = target;
+    }
+}
+
+/// Display string for a hovered link: local path, external URL or path#anchor.
+fn hover_target(state: &State, href: &str) -> Option<String> {
+    let document = state.document.as_ref()?;
+    match document::destination(&document.path, href) {
+        Ok(Destination::Local(path)) => Some(path.display().to_string()),
+        Ok(Destination::External(url)) => Some(url),
+        Ok(Destination::Anchor(anchor)) => Some(format!("{}#{anchor}", document.path.display())),
+        Err(_) => None,
     }
 }
 
@@ -509,6 +594,8 @@ fn app() -> Element {
             dioxus_native::winit::keyboard::ModifiersState::empty(),
         ))
     });
+    let taps =
+        use_hook(|| std::rc::Rc::new(std::cell::Cell::new((0u32, std::time::Instant::now()))));
     let window = dioxus_native::use_window();
     let chrome_window = window.clone();
     let chrome_shell = use_context::<Arc<dyn blitz_traits::shell::ShellProvider>>();
@@ -520,16 +607,27 @@ fn app() -> Element {
         match event {
             WindowEvent::PointerMoved { position, .. } => {
                 barrier.flush();
-                barrier.drag_scrollbar(position.y / window.scale_factor());
+                let scale = window.scale_factor();
+                let point = (position.x / scale, position.y / scale);
+                if state.peek().pointer != Some(point) {
+                    state.write().pointer = Some(point);
+                }
+                update_hover(state, &barrier, Some(point));
+                barrier.drag_scrollbar(point.1);
                 let drag = state.peek().drag;
                 if let Some(boundary) = drag {
-                    let scale = window.scale_factor();
                     state.write().layout.resize(
                         boundary,
-                        position.x / scale,
+                        point.0,
                         f64::from(window.surface_size().width) / scale,
                     );
                 }
+            }
+            WindowEvent::PointerLeft { .. } => {
+                if state.peek().pointer.is_some() {
+                    state.write().pointer = None;
+                }
+                update_hover(state, &barrier, None);
             }
             WindowEvent::PointerButton {
                 state: ElementState::Released,
@@ -541,9 +639,16 @@ fn app() -> Element {
                     state.write().drag = None;
                 }
             }
-            WindowEvent::PointerButton { .. } | WindowEvent::PointerEntered { .. } => {
-                barrier.flush()
+            WindowEvent::PointerButton {
+                state: ElementState::Pressed,
+                ..
+            } => {
+                if state.peek().select_all {
+                    state.write().select_all = false;
+                }
+                barrier.flush();
             }
+            WindowEvent::PointerEntered { .. } => barrier.flush(),
             WindowEvent::Focused(false) => barrier.end_scrollbar_drag(),
             WindowEvent::MouseWheel { delta, .. } => {
                 barrier.flush();
@@ -569,6 +674,8 @@ fn app() -> Element {
                                 state.write().theme = theme;
                             }
                             "r" => reload(state),
+                            "a" => select_shortcut(state, &barrier, &taps),
+                            "l" => copy_path(state),
                             "b" => {
                                 let visible = state.peek().layout.sidebar_visible;
                                 state.write().layout.sidebar_visible = !visible;
@@ -627,7 +734,7 @@ fn Shell(mut state: Signal<State>, onwindow: Option<EventHandler<WindowAction>>)
         div { class: theme.class(), tabindex: "-1",
             onkeydown: move |event| {
                 use dioxus::html::input_data::keyboard_types::Code;
-                if event.modifiers().ctrl() && event.code() == Code::KeyC { event.prevent_default(); }
+                if event.modifiers().ctrl() && matches!(event.code(), Code::KeyC | Code::KeyA | Code::KeyL) { event.prevent_default(); }
             },
             onmounted: move |event| barrier.mount(event),
             onclick: move |_| {if state.peek().menu.is_some() {state.write().menu=None;}},
@@ -703,6 +810,7 @@ fn Shell(mut state: Signal<State>, onwindow: Option<EventHandler<WindowAction>>)
                     button { role: "menuitem", onclick: move |_| workspace(state,path.clone()), "Open as workspace" }
                 } }}
             }
+            if let Some(target)=&snapshot.hover_target { div { class: "hover-target", "{target}" } }
         }
     }
 }

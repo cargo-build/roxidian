@@ -314,25 +314,7 @@ fn selection_copy_uses_selected_text_instead_of_the_whole_source() {
             doc.vdom.in_scope(ScopeId::APP, || {
                 copy_text(state, selected, "Selection copied")
             });
-            tokio::time::timeout(std::time::Duration::from_secs(2), async {
-                loop {
-                    doc.poll(None);
-                    if doc
-                        .inner
-                        .borrow()
-                        .shell_provider
-                        .get_clipboard_text()
-                        .ok()
-                        .as_deref()
-                        == Some("roxidian")
-                    {
-                        break;
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-                }
-            })
-            .await
-            .expect("clipboard receipt");
+            clipboard_receipt(&mut doc, "roxidian").await;
         });
 }
 
@@ -855,25 +837,332 @@ fn ctrl_c_without_selection_copies_the_whole_source() {
                 .clone();
             doc.vdom
                 .in_scope(ScopeId::APP, || copy_shortcut(state, &barrier, false));
-            tokio::time::timeout(std::time::Duration::from_secs(2), async {
-                loop {
-                    doc.poll(None);
-                    if doc
-                        .inner
-                        .borrow()
-                        .shell_provider
-                        .get_clipboard_text()
-                        .ok()
-                        .as_deref()
-                        == Some(source.as_str())
-                    {
-                        return;
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                }
-            })
-            .await
-            .expect("whole source copied");
+            clipboard_receipt(&mut doc, &source).await;
             assert_eq!(state.peek().notice.as_deref(), Some("Source copied"));
         });
+}
+
+async fn clipboard_receipt(doc: &mut dioxus_native::DioxusDocument, expected: &str) {
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            doc.poll(None);
+            if doc
+                .inner
+                .borrow()
+                .shell_provider
+                .get_clipboard_text()
+                .ok()
+                .as_deref()
+                == Some(expected)
+            {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("clipboard receipt");
+}
+
+#[test]
+fn word_at_boundaries() {
+    use crate::native::word_at;
+    assert_eq!(word_at("hello world", 0), Some("hello"));
+    assert_eq!(word_at("hello world", 2), Some("hello"));
+    assert_eq!(word_at("hello world", 5), Some("hello"));
+    assert_eq!(word_at("hello world", 7), Some("world"));
+    assert_eq!(word_at("hello world", 11), Some("world"));
+    assert_eq!(word_at("   ", 1), None);
+    assert_eq!(word_at("", 0), None);
+    assert_eq!(word_at("привет мир", 8), Some("привет"));
+    assert_eq!(word_at("привет мир", 12), Some("привет"));
+    assert_eq!(word_at("привет мир", 15), Some("мир"));
+}
+
+#[test]
+fn ctrl_a_selects_all_rendered_pane_text() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("runtime")
+        .block_on(async {
+            let Harness {
+                mut doc,
+                state,
+                barrier,
+            } = harness();
+            let taps = Cell::new((0, std::time::Instant::now()));
+            doc.vdom
+                .in_scope(ScopeId::APP, || select_shortcut(state, &barrier, &taps));
+            assert!(state.peek().select_all);
+            assert!(barrier.selected_text().is_some(), "select-all highlights");
+            let expected = {
+                let inner = doc.inner.borrow();
+                inner
+                    .query_selector(".panes")
+                    .ok()
+                    .flatten()
+                    .map(|panes| {
+                        blitz_dom::traversal::TreeTraverser::new_with_root(&inner, panes)
+                            .filter_map(|id| inner.get_node(id))
+                            .filter_map(|node| {
+                                node.element_data()
+                                    .and_then(|element| element.inline_layout_data.as_ref())
+                            })
+                            .filter(|layout| !layout.text.is_empty())
+                            .map(|layout| layout.text.clone())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default()
+                    .join(" ")
+            };
+            assert!(!expected.is_empty());
+            assert_eq!(barrier.all_text().as_deref(), Some(expected.as_str()));
+            doc.vdom
+                .in_scope(ScopeId::APP, || copy_shortcut(state, &barrier, false));
+            clipboard_receipt(&mut doc, &expected).await;
+            assert_eq!(state.peek().notice.as_deref(), Some("Selection copied"));
+            assert_eq!(taps.get().0, 1);
+        });
+}
+
+#[test]
+fn ctrl_a_double_copies_the_word_under_the_pointer() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("runtime")
+        .block_on(async {
+            let Harness {
+                mut doc,
+                mut state,
+                barrier,
+            } = harness();
+            let point = {
+                let inner = doc.inner.borrow();
+                let heading = inner
+                    .query_selector("h1")
+                    .expect("selector")
+                    .expect("heading");
+                let position = inner
+                    .get_node(heading)
+                    .expect("heading")
+                    .absolute_position(0., 0.);
+                (f64::from(position.x) + 10., f64::from(position.y) + 10.)
+            };
+            doc.vdom
+                .in_scope(ScopeId::APP, || state.write().pointer = Some(point));
+            let taps = Cell::new((1, std::time::Instant::now()));
+            doc.vdom
+                .in_scope(ScopeId::APP, || select_shortcut(state, &barrier, &taps));
+            clipboard_receipt(&mut doc, "roxidian").await;
+            assert_eq!(state.peek().notice.as_deref(), Some("Word copied"));
+            assert_eq!(taps.get().0, 2);
+        });
+}
+
+#[test]
+fn ctrl_a_triple_copies_the_block_under_the_pointer() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("runtime")
+        .block_on(async {
+            let Harness {
+                mut doc,
+                mut state,
+                barrier,
+            } = harness();
+            let (point, expected) = {
+                let inner = doc.inner.borrow();
+                let paragraph = inner
+                    .query_selector(".markdown p")
+                    .expect("selector")
+                    .expect("paragraph");
+                let node = inner.get_node(paragraph).expect("paragraph node");
+                let position = node.absolute_position(0., 0.);
+                (
+                    (f64::from(position.x) + 10., f64::from(position.y) + 10.),
+                    node.text_content().trim().to_string(),
+                )
+            };
+            assert_eq!(
+                barrier.word_at_pointer(point.0, point.1).as_deref(),
+                Some("Markdown"),
+                "the same point yields a single word for the double tap"
+            );
+            doc.vdom
+                .in_scope(ScopeId::APP, || state.write().pointer = Some(point));
+            let taps = Cell::new((2, std::time::Instant::now()));
+            doc.vdom
+                .in_scope(ScopeId::APP, || select_shortcut(state, &barrier, &taps));
+            clipboard_receipt(&mut doc, &expected).await;
+            assert_eq!(state.peek().notice.as_deref(), Some("Line copied"));
+            assert_eq!(taps.get().0, 3);
+        });
+}
+
+#[test]
+fn ctrl_a_taps_restart_after_triple_and_after_the_window() {
+    let Harness {
+        doc,
+        state,
+        barrier,
+    } = harness();
+    let taps = Cell::new((3, std::time::Instant::now()));
+    doc.vdom
+        .in_scope(ScopeId::APP, || select_shortcut(state, &barrier, &taps));
+    assert_eq!(taps.get().0, 1, "a triple restarts the ladder");
+    taps.set((
+        1,
+        std::time::Instant::now() - std::time::Duration::from_secs(1),
+    ));
+    doc.vdom
+        .in_scope(ScopeId::APP, || select_shortcut(state, &barrier, &taps));
+    assert_eq!(taps.get().0, 1, "a pause longer than the window restarts");
+    taps.set((1, std::time::Instant::now()));
+    doc.vdom
+        .in_scope(ScopeId::APP, || select_shortcut(state, &barrier, &taps));
+    assert_eq!(taps.get().0, 2, "a quick second tap escalates");
+}
+
+#[test]
+fn ctrl_l_copies_the_document_path() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("runtime")
+        .block_on(async {
+            let Harness {
+                mut doc,
+                state,
+                barrier: _barrier,
+            } = harness();
+            let path = state
+                .peek()
+                .document
+                .as_ref()
+                .expect("document")
+                .path
+                .display()
+                .to_string();
+            doc.vdom.in_scope(ScopeId::APP, || copy_path(state));
+            clipboard_receipt(&mut doc, &path).await;
+            assert_eq!(state.peek().notice.as_deref(), Some("Path copied"));
+        });
+}
+
+#[test]
+fn hover_strip_resolves_link_targets() {
+    let Harness {
+        mut doc,
+        state,
+        barrier,
+    } = harness();
+    doc.inner
+        .borrow_mut()
+        .scroll_to_fragment("explore-without-editing");
+    barrier.flush();
+    let link_point = |href: &str| -> (f64, f64) {
+        let (position, width, height) = {
+            let inner = doc.inner.borrow();
+            let paragraph = inner
+                .query_selector_all(".markdown p")
+                .expect("selector")
+                .into_iter()
+                .find(|&id| {
+                    inner
+                        .get_node(id)
+                        .expect("paragraph")
+                        .text_content()
+                        .contains("project introduction")
+                })
+                .expect("links paragraph");
+            let node = inner.get_node(paragraph).expect("paragraph node");
+            let position = node.absolute_position(0., 0.);
+            (
+                position,
+                node.final_layout().size.width,
+                node.final_layout().size.height,
+            )
+        };
+        (0..=width as i32)
+            .step_by(4)
+            .find_map(|dx| {
+                (0..=height as i32).step_by(8).find_map(|dy| {
+                    let point = (
+                        f64::from(position.x) + f64::from(dx),
+                        f64::from(position.y) + f64::from(dy),
+                    );
+                    (barrier.link_at_pointer(point.0, point.1).as_deref() == Some(href))
+                        .then_some(point)
+                })
+            })
+            .expect("link under the pointer")
+    };
+    let local = link_point("../../README.md");
+    let anchor = link_point("#your-notes-in-focus");
+    let document_path = state
+        .peek()
+        .document
+        .as_ref()
+        .expect("document")
+        .path
+        .clone();
+    let expected_local = document_path
+        .parent()
+        .expect("fixtures dir")
+        .parent()
+        .expect("tests dir")
+        .parent()
+        .expect("repo root")
+        .join("README.md")
+        .display()
+        .to_string();
+    doc.vdom
+        .in_scope(ScopeId::APP, || update_hover(state, &barrier, Some(local)));
+    assert_eq!(
+        state.peek().hover_target.as_deref(),
+        Some(expected_local.as_str())
+    );
+    doc.poll(None);
+    barrier.flush();
+    let strip = doc
+        .inner
+        .borrow()
+        .query_selector(".hover-target")
+        .expect("selector")
+        .expect("hover strip");
+    assert_eq!(
+        doc.inner
+            .borrow()
+            .get_node(strip)
+            .expect("strip")
+            .text_content(),
+        expected_local
+    );
+    doc.vdom
+        .in_scope(ScopeId::APP, || update_hover(state, &barrier, Some(anchor)));
+    let expected_anchor = format!("{}#your-notes-in-focus", document_path.display());
+    assert_eq!(
+        state.peek().hover_target.as_deref(),
+        Some(expected_anchor.as_str())
+    );
+    assert_eq!(
+        hover_target(&state.peek(), "https://example.com/docs").as_deref(),
+        Some("https://example.com/docs")
+    );
+    doc.vdom
+        .in_scope(ScopeId::APP, || update_hover(state, &barrier, None));
+    assert!(state.peek().hover_target.is_none());
+    doc.poll(None);
+    barrier.flush();
+    assert!(
+        doc.inner
+            .borrow()
+            .query_selector(".hover-target")
+            .expect("selector")
+            .is_none(),
+        "leaving the link clears the strip"
+    );
 }

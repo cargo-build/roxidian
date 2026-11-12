@@ -57,6 +57,8 @@ directory as workspace; a folder becomes the workspace itself.
 | Ctrl+T | Toggle theme |
 | Ctrl+B | Hide/show the workspace sidebar |
 | Ctrl+C | Copy selection, or the whole file when nothing is selected |
+| Ctrl+A | Select all rendered text; press twice to copy the word under the pointer, three times to copy its paragraph/block |
+| Ctrl+L | Copy the document path |
 | Alt+Up | Parent workspace |
 | Alt+Left / Alt+Right | Back / forward through document history |
 | Ctrl+R | Reload directory and document |

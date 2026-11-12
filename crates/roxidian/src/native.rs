@@ -152,15 +152,92 @@ impl LayoutBarrier {
     pub fn selected_text(&self) -> Option<String> {
         let mounted = self.mounted.borrow();
         let doc = mounted.as_ref()?.doc();
-        let input_focused = doc
-            .get_focussed_node_id()
-            .and_then(|id| doc.get_node(id))
-            .and_then(|node| node.element_data())
-            .is_some_and(|element| element.text_input_data().is_some());
-        if input_focused {
+        if input_focused(&doc) {
             return None;
         }
         doc.get_selected_text()
+    }
+
+    /// Select all rendered text of the reader panes, excluding UI chrome.
+    /// Returns false while a text input owns focus or nothing is selectable.
+    pub fn select_all_text(&self) -> bool {
+        self.flush();
+        let mounted = self.mounted.borrow();
+        let Some(handle) = mounted.as_ref() else {
+            return false;
+        };
+        let mut doc = handle.doc_mut();
+        if input_focused(&doc) {
+            return false;
+        }
+        let roots = pane_roots(&doc);
+        let (Some(first), Some(last)) = (roots.first().copied(), roots.last().copied()) else {
+            return false;
+        };
+        let end = doc.get_node(last).and_then(inline_text).map_or(0, str::len);
+        doc.set_text_selection(first, 0, last, end);
+        doc.shell_provider.request_redraw();
+        true
+    }
+
+    /// Clean join of the rendered pane text. Blitz beta duplicates inline roots
+    /// in multi-block selection ranges, so select-all copies this instead of
+    /// `get_selected_text`.
+    pub fn all_text(&self) -> Option<String> {
+        let mounted = self.mounted.borrow();
+        let doc = mounted.as_ref()?.doc();
+        let text = pane_roots(&doc)
+            .into_iter()
+            .filter_map(|id| doc.get_node(id).and_then(inline_text).map(str::to_string))
+            .collect::<Vec<_>>()
+            .join(" ");
+        (!text.is_empty()).then_some(text)
+    }
+
+    /// Whitespace-delimited word under the pointer, from the exact text offset.
+    pub fn word_at_pointer(&self, x: f64, y: f64) -> Option<String> {
+        self.flush();
+        let mounted = self.mounted.borrow();
+        let doc = mounted.as_ref()?.doc();
+        let (id, offset) = doc.find_text_position(x as f32, y as f32)?;
+        word_at(inline_text(doc.get_node(id)?)?, offset).map(str::to_string)
+    }
+
+    /// Trimmed text of the nearest block ancestor under the pointer.
+    pub fn block_at_pointer(&self, x: f64, y: f64) -> Option<String> {
+        self.flush();
+        let mounted = self.mounted.borrow();
+        let doc = mounted.as_ref()?.doc();
+        let hit = doc.hit(x as f32, y as f32)?;
+        let mut node = doc.get_node(hit.node_id)?;
+        loop {
+            if node
+                .element_data()
+                .is_some_and(|element| BLOCK_TAGS.contains(&element.name.local.as_ref()))
+            {
+                let text = node.text_content().trim().to_string();
+                return (!text.is_empty()).then_some(text);
+            }
+            node = doc.get_node(node.parent?)?;
+        }
+    }
+
+    /// href of the nearest link ancestor under the pointer.
+    pub fn link_at_pointer(&self, x: f64, y: f64) -> Option<String> {
+        self.flush();
+        let mounted = self.mounted.borrow();
+        let doc = mounted.as_ref()?.doc();
+        let hit = doc.hit(x as f32, y as f32)?;
+        let mut node = doc.get_node(hit.node_id)?;
+        loop {
+            if node
+                .element_data()
+                .is_some_and(|element| &*element.name.local == "a")
+            {
+                return node.attr("href".into()).map(str::to_string);
+            }
+            node = doc.get_node(node.parent?)?;
+        }
     }
 
     pub fn scroll_tree_to(&self, y: f64) {
@@ -264,6 +341,88 @@ impl LayoutBarrier {
             }
         }
     }
+}
+
+/// Block elements whose text a triple Ctrl+A copies as one paragraph.
+const BLOCK_TAGS: [&str; 24] = [
+    "p",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "li",
+    "pre",
+    "blockquote",
+    "td",
+    "th",
+    "dt",
+    "dd",
+    "figcaption",
+    "summary",
+    "div",
+    "article",
+    "section",
+    "header",
+    "footer",
+    "main",
+    "aside",
+    "nav",
+];
+
+fn input_focused(doc: &blitz_dom::BaseDocument) -> bool {
+    doc.get_focussed_node_id()
+        .and_then(|id| doc.get_node(id))
+        .and_then(|node| node.element_data())
+        .is_some_and(|element| element.text_input_data().is_some())
+}
+
+fn inline_text(node: &blitz_dom::Node) -> Option<&str> {
+    Some(&node.element_data()?.inline_layout_data.as_ref()?.text)
+}
+
+/// Inline roots of the reader panes in document order (source pane precedes
+/// preview in the DOM).
+fn pane_roots(doc: &blitz_dom::BaseDocument) -> Vec<blitz_dom::NodeId> {
+    doc.query_selector(".panes")
+        .ok()
+        .flatten()
+        .map(|panes| {
+            blitz_dom::traversal::TreeTraverser::new_with_root(doc, panes)
+                .filter_map(|id| doc.get_node(id))
+                .filter(|node| inline_text(node).is_some_and(|text| !text.is_empty()))
+                .map(|node| node.id)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Word containing the byte offset; on whitespace, the nearest word to the
+/// left, else to the right. Offsets are clamped to char boundaries.
+pub(crate) fn word_at(text: &str, offset: usize) -> Option<&str> {
+    let mut offset = offset.min(text.len());
+    while !text.is_char_boundary(offset) {
+        offset += 1;
+    }
+    let start = text[..offset]
+        .char_indices()
+        .rev()
+        .take_while(|(_, ch)| !ch.is_whitespace())
+        .last()
+        .map_or(offset, |(index, _)| index);
+    let end = text[offset..]
+        .char_indices()
+        .take_while(|(_, ch)| !ch.is_whitespace())
+        .last()
+        .map_or(offset, |(index, ch)| offset + index + ch.len_utf8());
+    if start < end {
+        return Some(&text[start..end]);
+    }
+    text[..offset]
+        .split_whitespace()
+        .last()
+        .or_else(|| text[offset..].split_whitespace().next())
 }
 
 pub fn use_layout_barrier() -> Rc<LayoutBarrier> {
