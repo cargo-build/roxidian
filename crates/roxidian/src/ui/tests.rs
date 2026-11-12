@@ -752,9 +752,10 @@ fn history_back_and_forward_restore_documents_and_truncate() {
     let a = directory.path().join("a.md");
     let b = directory.path().join("b.md");
     let c = directory.path().join("c.md");
-    for path in [&a, &b, &c] {
+    for path in [&a, &c] {
         std::fs::write(path, "# Doc\n").expect("fixture");
     }
+    std::fs::write(&b, "# Doc\n".repeat(200)).expect("tall fixture");
     let Harness {
         mut doc,
         state,
@@ -786,6 +787,35 @@ fn history_back_and_forward_restore_documents_and_truncate() {
     assert!(can_forward(&state.peek()));
     doc.vdom.in_scope(ScopeId::APP, || forward(state));
     pump_until(&mut doc, &runtime, &barrier, at(&b));
+    let preview = doc
+        .inner
+        .borrow()
+        .query_selector(".preview")
+        .expect("selector")
+        .expect("preview pane");
+    doc.inner
+        .borrow_mut()
+        .scroll_to(preview, 0., 300., blitz_dom::ScrollBehavior::Instant);
+    doc.vdom.in_scope(ScopeId::APP, || back(state));
+    pump_until(&mut doc, &runtime, &barrier, at(&a));
+    doc.vdom.in_scope(ScopeId::APP, || forward(state));
+    pump_until(&mut doc, &runtime, &barrier, at(&b));
+    let restored = doc
+        .inner
+        .borrow()
+        .query_selector(".preview")
+        .expect("selector")
+        .expect("preview pane");
+    assert_eq!(
+        doc.inner
+            .borrow()
+            .get_node(restored)
+            .expect("pane")
+            .scroll_offset()
+            .y,
+        300.,
+        "history restores the pane scroll position"
+    );
     doc.vdom.in_scope(ScopeId::APP, || back(state));
     pump_until(&mut doc, &runtime, &barrier, at(&a));
     doc.vdom.in_scope(ScopeId::APP, || visit(state, c.clone()));

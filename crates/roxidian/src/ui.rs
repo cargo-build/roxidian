@@ -42,6 +42,7 @@ struct State {
     drag: Option<layout::Boundary>,
     history: Vec<HistoryEntry>,
     history_index: usize,
+    pending_scroll: Option<crate::native::DocumentScroll>,
     watch: Option<watch::Watch>,
 }
 
@@ -56,6 +57,7 @@ enum SearchPanel {
 struct HistoryEntry {
     path: PathBuf,
     mode: Mode,
+    scroll: crate::native::DocumentScroll,
 }
 
 #[derive(Clone, Copy)]
@@ -92,6 +94,7 @@ impl State {
             drag: None,
             history: Vec::new(),
             history_index: 0,
+            pending_scroll: None,
             watch: None,
         }
     }
@@ -297,12 +300,15 @@ fn can_forward(state: &State) -> bool {
 
 /// User navigation: record the visit, then open it.
 fn visit(mut state: Signal<State>, path: PathBuf) {
+    let barrier = consume_context::<std::rc::Rc<crate::native::LayoutBarrier>>();
     {
         let mut state = state.write();
         let index = state.history_index;
         let mode = state.mode;
+        let scroll = barrier.read_document_scroll();
         if let Some(current) = state.history.get_mut(index) {
             current.mode = mode;
+            current.scroll = scroll;
         }
         if state
             .history
@@ -313,6 +319,7 @@ fn visit(mut state: Signal<State>, path: PathBuf) {
             state.history.push(HistoryEntry {
                 mode: Mode::for_path(&path),
                 path: path.clone(),
+                scroll: crate::native::DocumentScroll::default(),
             });
             state.history_index = state.history.len() - 1;
         }
@@ -330,6 +337,7 @@ fn forward(state: Signal<State>) {
 
 /// Move through the history without recording a new visit.
 fn travel(mut state: Signal<State>, step: isize) {
+    let barrier = consume_context::<std::rc::Rc<crate::native::LayoutBarrier>>();
     let entry = {
         let mut state = state.write();
         let index = state.history_index;
@@ -338,11 +346,15 @@ fn travel(mut state: Signal<State>, step: isize) {
             return;
         }
         let mode = state.mode;
+        let scroll = barrier.read_document_scroll();
         if let Some(current) = state.history.get_mut(index) {
             current.mode = mode;
+            current.scroll = scroll;
         }
         state.history_index = next as usize;
-        state.history[next as usize].clone()
+        let entry = state.history[next as usize].clone();
+        state.pending_scroll = Some(entry.scroll);
+        entry
     };
     open(state, entry.path, Some(entry.mode));
 }
@@ -564,6 +576,14 @@ fn app() -> Element {
 #[component]
 fn Shell(mut state: Signal<State>, onwindow: Option<EventHandler<WindowAction>>) -> Element {
     let barrier = crate::native::use_layout_barrier();
+    let restore_barrier = barrier.clone();
+    dioxus::core::use_after_render(move || {
+        let pending = state.peek().pending_scroll;
+        if let Some(scroll) = pending {
+            state.write().pending_scroll = None;
+            restore_barrier.restore_document_scroll(scroll);
+        }
+    });
     let snapshot = state.read();
     let document = snapshot.document.clone();
     let root = snapshot.root.display().to_string();

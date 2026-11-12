@@ -42,6 +42,20 @@ impl ScrollMetrics {
     }
 }
 
+/// Scroll offset of one reader pane.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PaneScroll {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Scroll offsets of both reader panes, remembered per history entry.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct DocumentScroll {
+    pub preview: PaneScroll,
+    pub source: PaneScroll,
+}
+
 #[derive(Clone)]
 struct ScrollbarDrag {
     handle: NodeHandle,
@@ -157,6 +171,46 @@ impl LayoutBarrier {
                 doc.shell_provider.request_redraw();
             }
         }
+    }
+
+    /// Read both reader pane offsets; absent panes read as zero.
+    pub fn read_document_scroll(&self) -> DocumentScroll {
+        let mounted = self.mounted.borrow();
+        let Some(handle) = mounted.as_ref() else {
+            return DocumentScroll::default();
+        };
+        let doc = handle.doc();
+        let pane = |selector: &str| {
+            doc.query_selector(selector)
+                .ok()
+                .flatten()
+                .and_then(|id| doc.get_node(id))
+                .map(|node| PaneScroll {
+                    x: node.scroll_offset().x,
+                    y: node.scroll_offset().y,
+                })
+                .unwrap_or_default()
+        };
+        DocumentScroll {
+            preview: pane(".preview"),
+            source: pane(".source"),
+        }
+    }
+
+    /// Restore remembered pane offsets after the panes remount. @req DECL0003
+    pub fn restore_document_scroll(&self, scroll: DocumentScroll) {
+        self.flush();
+        let mounted = self.mounted.borrow();
+        let Some(handle) = mounted.as_ref() else {
+            return;
+        };
+        let mut doc = handle.doc_mut();
+        for (selector, pane) in [(".preview", scroll.preview), (".source", scroll.source)] {
+            if let Ok(Some(id)) = doc.query_selector(selector) {
+                doc.scroll_to(id, pane.x, pane.y, blitz_dom::ScrollBehavior::Instant);
+            }
+        }
+        doc.shell_provider.request_redraw();
     }
     pub fn mount(&self, event: MountedEvent) {
         if let Some(handle) = event.downcast::<NodeHandle>() {
