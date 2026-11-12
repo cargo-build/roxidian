@@ -585,16 +585,6 @@ fn Shell(mut state: Signal<State>, onwindow: Option<EventHandler<WindowAction>>)
             onmounted: move |event| barrier.mount(event),
             onclick: move |_| {if state.peek().menu.is_some() {state.write().menu=None;}},
             header { class: "toolbar",
-                button { class: "nav-button", title: "Back (Alt+Left)", aria_label: "Back", disabled: !can_back(&snapshot), onclick: move |_| back(state),
-                    svg {width:"20",height:"20",view_box:"0 0 24 24",fill:"none",stroke:"currentColor",stroke_width:"2",stroke_linecap:"round",stroke_linejoin:"round",
-                        path {d:"M19 12H5M12 19l-7-7 7-7"}
-                    }
-                }
-                button { class: "nav-button", title: "Forward (Alt+Right)", aria_label: "Forward", disabled: !can_forward(&snapshot), onclick: move |_| forward(state),
-                    svg {width:"20",height:"20",view_box:"0 0 24 24",fill:"none",stroke:"currentColor",stroke_width:"2",stroke_linecap:"round",stroke_linejoin:"round",
-                        path {d:"M5 12h14M12 5l7 7-7 7"}
-                    }
-                }
                 button { class:"workspace-toggle", title: "Toggle workspace (Ctrl+B)", aria_label: "Toggle workspace", aria_expanded: snapshot.layout.sidebar_visible,
                     onclick: move |_| {let visible=state.peek().layout.sidebar_visible;state.write().layout.sidebar_visible = !visible;},
                     svg {width:"28",height:"28",view_box:"0 0 24 24",fill:"none",stroke:"currentColor",stroke_width:"1.8",stroke_linecap:"round",stroke_linejoin:"round",
@@ -636,8 +626,22 @@ fn Shell(mut state: Signal<State>, onwindow: Option<EventHandler<WindowAction>>)
                 main { class: "reader",
                     if snapshot.panel==Some(SearchPanel::Document) { FindBar {state} }
                     if snapshot.panel==Some(SearchPanel::Workspace) { WorkspaceSearch {state} }
+                    div { class: "document-path",
+                        button { class: "nav-button", title: "Back (Alt+Left)", aria_label: "Back", disabled: !can_back(&snapshot), onclick: move |_| back(state),
+                            svg {width:"20",height:"20",view_box:"0 0 24 24",fill:"none",stroke:"currentColor",stroke_width:"2",stroke_linecap:"round",stroke_linejoin:"round",
+                                path {d:"M19 12H5M12 19l-7-7 7-7"}
+                            }
+                        }
+                        button { class: "nav-button", title: "Forward (Alt+Right)", aria_label: "Forward", disabled: !can_forward(&snapshot), onclick: move |_| forward(state),
+                            svg {width:"20",height:"20",view_box:"0 0 24 24",fill:"none",stroke:"currentColor",stroke_width:"2",stroke_linecap:"round",stroke_linejoin:"round",
+                                path {d:"M5 12h14M12 5l7 7-7 7"}
+                            }
+                        }
+                        span { class: "document-path-text",
+                            if let Some(doc)=&document { "{doc.path.display()}" }
+                        }
+                    }
                     if let Some(doc)=&document {
-                        div { class: "document-path", "{doc.path.display()}" }
                         Reader { opened: Opened(doc.clone()), mode, query: snapshot.find_query.clone(), active: snapshot.find_index, onlink, split: snapshot.layout.split, onresize: move |_| state.write().drag=Some(layout::Boundary::Split) }
                         footer { class: "statusbar", span { class: "readonly", "READ ONLY" } span { "{doc.lines} lines · {doc.source.len()} bytes · UTF-8" } }
                     } else {

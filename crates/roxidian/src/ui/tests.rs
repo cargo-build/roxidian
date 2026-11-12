@@ -797,7 +797,7 @@ fn history_back_and_forward_restore_documents_and_truncate() {
     assert!(
         doc.inner
             .borrow()
-            .query_selector("button[aria-label=\"Back\"]")
+            .query_selector(".document-path button[aria-label=\"Back\"]")
             .expect("selector")
             .is_some()
     );
