@@ -40,6 +40,8 @@ highlighting for recognized languages and configuration formats. Raw HTML remain
 literal text. UTF-8 files up to 16 MiB are accepted; binary input produces an error.
 Every newly opened Markdown document starts in Preview. Source and Split are explicit
 choices for the current document. Drag the sidebar or split boundary to resize panes.
+External changes in watched folders refresh the tree and the open document
+automatically; Ctrl+R remains the manual reload.
 
 In the operator's Yazi configuration, `g r` opens the hovered file or folder. Text and
 source files also offer **roxidian (readonly)** in Open With. A file retains Yazi's current

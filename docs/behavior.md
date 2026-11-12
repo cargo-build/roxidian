@@ -17,6 +17,12 @@ paragraphs, emphasis, lists, quotes, fenced code, links, local images, task list
 GFM tables receive native rendering. Raw HTML is displayed as literal text; scripts
 are never evaluated. Local document links resolve relative to the displayed file.
 
+External filesystem changes refresh the view without manual reload: the tree follows
+created, removed and renamed entries in the workspace root and expanded folders, and
+the open document re-reads when its file or an ancestor folder changes. Watching never
+writes files. A document deleted outside keeps its last snapshot with a visible error,
+as manual reload does; the chosen view mode survives an automatic refresh.
+
 SynthWave-inspired dark is the launch default. An Obsidian-inspired white palette is
 available in the same window. The UI never writes document or workspace files.
 

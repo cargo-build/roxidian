@@ -17,6 +17,7 @@ webbrowser = "1"
 clap = { version = "4", features = ["derive"] }
 ignore = "0.4"
 nucleo-matcher = "0.3"
+notify = "8"
 regex = "1"
 pulldown-cmark = "0.13.6"
 url = "2"

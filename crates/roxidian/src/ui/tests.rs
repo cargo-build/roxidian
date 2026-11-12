@@ -680,3 +680,68 @@ fn document_scrollbar_reveals_before_wheel_and_drags_each_pane() {
             });
         });
 }
+
+#[test]
+fn external_delete_removes_the_tree_row() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path = directory.path().join("gone.md");
+    std::fs::write(&path, "# Gone\n").expect("fixture");
+    let Harness {
+        mut doc,
+        mut state,
+        barrier,
+    } = harness();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("runtime");
+    let _guard = runtime.enter();
+    doc.vdom.in_scope(ScopeId::APP, || {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        state.write().watch = Some(crate::watch::Watch::new(tx).expect("watcher"));
+        watch_loop(state, rx);
+        load_tree(state, directory.path().to_path_buf());
+    });
+    let row_present = |doc: &dioxus_native::DioxusDocument| {
+        doc.inner
+            .borrow()
+            .query_selector("nav.tree .tree-row")
+            .expect("selector")
+            .is_some()
+    };
+    pump_until(&mut doc, &runtime, &barrier, || {
+        state.peek().rows.iter().any(|row| row.path == path)
+    });
+    assert!(
+        row_present(&doc),
+        "fixture row must render before the delete"
+    );
+    std::fs::remove_file(&path).expect("external delete");
+    pump_until(&mut doc, &runtime, &barrier, || {
+        !state.peek().rows.iter().any(|row| row.path == path)
+    });
+    assert!(
+        !row_present(&doc),
+        "deleted row must leave the tree without manual reload"
+    );
+}
+
+fn pump_until(
+    doc: &mut dioxus_native::DioxusDocument,
+    runtime: &tokio::runtime::Runtime,
+    barrier: &Rc<crate::native::LayoutBarrier>,
+    condition: impl Fn() -> bool,
+) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !condition() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "external change never reached the tree"
+        );
+        doc.poll(None);
+        barrier.flush();
+        runtime.block_on(tokio::time::sleep(std::time::Duration::from_millis(20)));
+    }
+    doc.poll(None);
+    barrier.flush();
+}

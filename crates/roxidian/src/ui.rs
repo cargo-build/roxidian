@@ -5,12 +5,17 @@ use crate::{
     document::{self, Destination, Document},
     render, search,
     theme::Theme,
+    watch,
     workspace::{self, Entry},
 };
 use dioxus::core::Task;
 use dioxus::html::input_data::keyboard_types::NamedKey;
 use dioxus::prelude::*;
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 struct State {
     root: PathBuf,
@@ -35,6 +40,7 @@ struct State {
     find_index: usize,
     layout: layout::Layout,
     drag: Option<layout::Boundary>,
+    watch: Option<watch::Watch>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -75,6 +81,7 @@ impl State {
             find_index: 0,
             layout: layout::Layout::default(),
             drag: None,
+            watch: None,
         }
     }
 }
@@ -118,11 +125,12 @@ fn load_tree(mut state: Signal<State>, root: PathBuf) {
             Ok((_, Err(error))) => state.tree_error = Some(format!("{error:#}")),
             Err(error) => state.tree_error = Some(format!("Directory worker failed: {error}")),
         }
+        sync_watch(&mut state);
     });
     state.write().tree_task = Some(task);
 }
 
-fn open(mut state: Signal<State>, path: PathBuf) {
+fn open(mut state: Signal<State>, path: PathBuf, mode: Option<Mode>) {
     let (worker, generation) = {
         let mut state = state.write();
         if let Some(task) = state.file_task.take() {
@@ -151,15 +159,91 @@ fn open(mut state: Signal<State>, path: PathBuf) {
         state.loading = false;
         match result {
             Ok(Ok(document)) => {
-                state.mode = Mode::for_path(&document.path);
+                state.mode = mode.unwrap_or_else(|| Mode::for_path(&document.path));
                 state.document = Some(Arc::new(document));
                 state.find_index = 0;
             }
             Ok(Err(error)) => state.file_error = Some(format!("{error:#}")),
             Err(error) => state.file_error = Some(format!("Document worker failed: {error}")),
         }
+        sync_watch(&mut state);
     });
     state.write().file_task = Some(task);
+}
+
+/// Keep watches on exactly the directories whose rows are visible.
+fn sync_watch(state: &mut State) {
+    let Some(watch) = state.watch.as_mut() else {
+        return;
+    };
+    let dirs = std::iter::once(state.root.clone())
+        .chain(state.expanded.iter().cloned())
+        .chain(
+            state
+                .document
+                .as_ref()
+                .and_then(|doc| doc.path.parent().map(Path::to_path_buf)),
+        );
+    if let Err(error) = watch.sync(dirs) {
+        state.tree_error = Some(format!("Watch: {error}"));
+    }
+}
+
+const WATCH_QUIET: std::time::Duration = std::time::Duration::from_millis(200);
+const WATCH_BATCH: std::time::Duration = std::time::Duration::from_millis(1000);
+
+/// Debounce external events, then refresh the tree and document they affect.
+fn watch_loop(
+    state: Signal<State>,
+    mut events: tokio::sync::mpsc::UnboundedReceiver<notify::Result<notify::Event>>,
+) {
+    spawn(async move {
+        while let Some(first) = events.recv().await {
+            let deadline = tokio::time::Instant::now() + WATCH_BATCH;
+            let mut batch = vec![first];
+            loop {
+                let wait = deadline
+                    .saturating_duration_since(tokio::time::Instant::now())
+                    .min(WATCH_QUIET);
+                match tokio::time::timeout(wait, events.recv()).await {
+                    Ok(Some(next)) => batch.push(next),
+                    Ok(None) => return apply_watch(state, &batch),
+                    Err(_) => break,
+                }
+            }
+            apply_watch(state, &batch);
+        }
+    });
+}
+
+fn apply_watch(mut state: Signal<State>, batch: &[notify::Result<notify::Event>]) {
+    let mut events = Vec::new();
+    for result in batch {
+        match result {
+            Ok(event) => events.push(event.clone()),
+            Err(error) => state.write().tree_error = Some(format!("Watch: {error}")),
+        }
+    }
+    let refresh = watch::summarize(&events);
+    let (root, document, mode) = {
+        let state = state.read();
+        (
+            state.root.clone(),
+            state.document.as_ref().map(|doc| doc.path.clone()),
+            state.mode,
+        )
+    };
+    if refresh.tree {
+        load_tree(state, root);
+    }
+    if let Some(path) = document.filter(|path| {
+        refresh
+            .paths
+            .iter()
+            .any(|event| path == event || path.starts_with(event))
+    }) {
+        open(state, path, Some(mode));
+    }
 }
 
 fn workspace(mut state: Signal<State>, root: PathBuf) {
@@ -188,7 +272,7 @@ fn reload(state: Signal<State>) {
     };
     load_tree(state, root);
     if let Some(path) = file {
-        open(state, path);
+        open(state, path, None);
     }
 }
 
@@ -234,7 +318,7 @@ fn follow(mut state: Signal<State>, href: String) {
     match destination {
         Some(Ok(Destination::Local(path))) => match path.is_dir() {
             true => workspace(state, path),
-            false => open(state, path),
+            false => open(state, path, None),
         },
         Some(Ok(Destination::External(url))) => {
             spawn(async move {
@@ -269,7 +353,7 @@ fn activate(mut state: Signal<State>, entry: Entry) {
             load_tree(state, root);
         }
         (_, true) => reload(state),
-        _ => open(state, entry.path),
+        _ => open(state, entry.path, None),
     }
 }
 
@@ -282,9 +366,17 @@ fn app() -> Element {
     use_future(move || {
         let launch = launch.clone();
         async move {
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+            match watch::Watch::new(tx) {
+                Ok(watch) => {
+                    state.write().watch = Some(watch);
+                    watch_loop(state, rx);
+                }
+                Err(error) => state.write().tree_error = Some(format!("Watch: {error}")),
+            }
             load_tree(state, launch.root);
             if let Some(path) = launch.file {
-                open(state, path);
+                open(state, path, None);
             }
         }
     });

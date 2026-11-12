@@ -8,6 +8,7 @@ mod search;
 mod syntax;
 mod theme;
 mod ui;
+mod watch;
 mod workspace;
 
 #[cfg(test)]
