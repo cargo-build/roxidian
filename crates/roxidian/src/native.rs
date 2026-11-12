@@ -197,20 +197,31 @@ impl LayoutBarrier {
         }
     }
 
-    /// Restore remembered pane offsets after the panes remount. @req DECL0003
-    pub fn restore_document_scroll(&self, scroll: DocumentScroll) {
+    /// Restore remembered pane offsets once the panes are laid out. @req DECL0003
+    /// Returns false while the target content has no layout extent yet.
+    pub fn restore_document_scroll(&self, scroll: DocumentScroll) -> bool {
         self.flush();
         let mounted = self.mounted.borrow();
         let Some(handle) = mounted.as_ref() else {
-            return;
+            return false;
         };
         let mut doc = handle.doc_mut();
+        let mut ready = true;
         for (selector, pane) in [(".preview", scroll.preview), (".source", scroll.source)] {
             if let Ok(Some(id)) = doc.query_selector(selector) {
+                let extent = doc
+                    .get_node(id)
+                    .map(|node| f64::from(node.final_layout().scroll_height()))
+                    .unwrap_or(0.);
+                if pane.y > 0. && extent < pane.y {
+                    ready = false;
+                    continue;
+                }
                 doc.scroll_to(id, pane.x, pane.y, blitz_dom::ScrollBehavior::Instant);
             }
         }
         doc.shell_provider.request_redraw();
+        ready
     }
     pub fn mount(&self, event: MountedEvent) {
         if let Some(handle) = event.downcast::<NodeHandle>() {

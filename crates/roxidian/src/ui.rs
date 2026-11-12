@@ -42,7 +42,6 @@ struct State {
     drag: Option<layout::Boundary>,
     history: Vec<HistoryEntry>,
     history_index: usize,
-    pending_scroll: Option<crate::native::DocumentScroll>,
     watch: Option<watch::Watch>,
 }
 
@@ -94,7 +93,6 @@ impl State {
             drag: None,
             history: Vec::new(),
             history_index: 0,
-            pending_scroll: None,
             watch: None,
         }
     }
@@ -352,11 +350,38 @@ fn travel(mut state: Signal<State>, step: isize) {
             current.scroll = scroll;
         }
         state.history_index = next as usize;
-        let entry = state.history[next as usize].clone();
-        state.pending_scroll = Some(entry.scroll);
-        entry
+        state.history[next as usize].clone()
     };
+    let path = entry.path.clone();
+    let scroll = entry.scroll;
     open(state, entry.path, Some(entry.mode));
+    restore_scroll(state, barrier, path, scroll);
+}
+
+/// Apply a remembered scroll once the target document is mounted and laid out.
+fn restore_scroll(
+    state: Signal<State>,
+    barrier: std::rc::Rc<crate::native::LayoutBarrier>,
+    path: PathBuf,
+    scroll: crate::native::DocumentScroll,
+) {
+    spawn(async move {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        loop {
+            let mounted = state
+                .peek()
+                .document
+                .as_ref()
+                .is_some_and(|doc| doc.path == path);
+            if mounted && barrier.restore_document_scroll(scroll) {
+                return;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    });
 }
 
 fn set_mode(mut state: Signal<State>, mode: Mode) {
@@ -576,14 +601,6 @@ fn app() -> Element {
 #[component]
 fn Shell(mut state: Signal<State>, onwindow: Option<EventHandler<WindowAction>>) -> Element {
     let barrier = crate::native::use_layout_barrier();
-    let restore_barrier = barrier.clone();
-    dioxus::core::use_after_render(move || {
-        let pending = state.peek().pending_scroll;
-        if let Some(scroll) = pending {
-            state.write().pending_scroll = None;
-            restore_barrier.restore_document_scroll(scroll);
-        }
-    });
     let snapshot = state.read();
     let document = snapshot.document.clone();
     let root = snapshot.root.display().to_string();
