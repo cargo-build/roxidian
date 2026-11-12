@@ -50,7 +50,8 @@ syntax, not utility names occurring in arguments. Positional arguments remain up
 flag and ENV values are italic. Comments are muted italic text.
 
 Ordinary Markdown line endings flow as spaces; explicit hard breaks remain line breaks.
-Ctrl+C copies selected text, including with a non-Latin keyboard layout; Ctrl+Shift+C
+Ctrl+C copies selected text, including with a non-Latin keyboard layout, and copies
+the whole document source when nothing is selected; Ctrl+Shift+C
 copies the exact document source. Ctrl+B and the toolbar toggle hide/show the workspace
 without discarding its expanded folders. Scrolling the tree pins the current branch's
 ancestor folders above its rows; each pinned folder can collapse or open as workspace.

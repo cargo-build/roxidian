@@ -832,3 +832,48 @@ fn history_back_and_forward_restore_documents_and_truncate() {
             .is_some()
     );
 }
+
+#[test]
+fn ctrl_c_without_selection_copies_the_whole_source() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("runtime")
+        .block_on(async {
+            let Harness {
+                mut doc,
+                state,
+                barrier,
+            } = harness();
+            assert!(barrier.selected_text().is_none());
+            let source = state
+                .peek()
+                .document
+                .as_ref()
+                .expect("document")
+                .source
+                .clone();
+            doc.vdom
+                .in_scope(ScopeId::APP, || copy_shortcut(state, &barrier, false));
+            tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                loop {
+                    doc.poll(None);
+                    if doc
+                        .inner
+                        .borrow()
+                        .shell_provider
+                        .get_clipboard_text()
+                        .ok()
+                        .as_deref()
+                        == Some(source.as_str())
+                    {
+                        return;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("whole source copied");
+            assert_eq!(state.peek().notice.as_deref(), Some("Source copied"));
+        });
+}

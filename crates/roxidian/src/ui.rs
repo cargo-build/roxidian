@@ -417,6 +417,22 @@ fn copy_text(mut state: Signal<State>, text: String, notice: &'static str) {
     });
 }
 
+/// Ctrl+C: shift copies exact source; otherwise the selection, or the whole
+/// document source when nothing is selected.
+fn copy_shortcut(
+    state: Signal<State>,
+    barrier: &std::rc::Rc<crate::native::LayoutBarrier>,
+    shift: bool,
+) {
+    if shift {
+        copy(state);
+    } else if let Some(text) = barrier.selected_text() {
+        copy_text(state, text, "Selection copied");
+    } else {
+        copy(state);
+    }
+}
+
 fn follow(mut state: Signal<State>, href: String) {
     let destination = state
         .read()
@@ -538,11 +554,7 @@ fn app() -> Element {
                 if modifiers.get().control_key()
                     && event.physical_key == PhysicalKey::Code(KeyCode::KeyC)
                 {
-                    if modifiers.get().shift_key() {
-                        copy(state);
-                    } else if let Some(text) = barrier.selected_text() {
-                        copy_text(state, text, "Selection copied");
-                    }
+                    copy_shortcut(state, &barrier, modifiers.get().shift_key());
                     return;
                 }
                 match &event.logical_key {
@@ -610,14 +622,12 @@ fn Shell(mut state: Signal<State>, onwindow: Option<EventHandler<WindowAction>>)
     let source_only = document
         .as_ref()
         .is_some_and(|doc| !workspace::is_markdown(&doc.path));
-    let copy_barrier = barrier.clone();
     rsx! {
         style { {include_str!("viewer.css")} }
         div { class: theme.class(), tabindex: "-1",
             onkeydown: move |event| {
                 use dioxus::html::input_data::keyboard_types::Code;
-                if event.modifiers().ctrl() && event.code() == Code::KeyC &&
-                    (event.modifiers().shift() || copy_barrier.selected_text().is_some()) { event.prevent_default(); }
+                if event.modifiers().ctrl() && event.code() == Code::KeyC { event.prevent_default(); }
             },
             onmounted: move |event| barrier.mount(event),
             onclick: move |_| {if state.peek().menu.is_some() {state.write().menu=None;}},

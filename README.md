@@ -56,7 +56,7 @@ directory as workspace; a folder becomes the workspace itself.
 | Ctrl+Shift+F | Fuzzy search workspace file paths and text |
 | Ctrl+T | Toggle theme |
 | Ctrl+B | Hide/show the workspace sidebar |
-| Ctrl+C | Copy selected text |
+| Ctrl+C | Copy selection, or the whole file when nothing is selected |
 | Alt+Up | Parent workspace |
 | Alt+Left / Alt+Right | Back / forward through document history |
 | Ctrl+R | Reload directory and document |
