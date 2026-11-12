@@ -40,6 +40,8 @@ struct State {
     find_index: usize,
     layout: layout::Layout,
     drag: Option<layout::Boundary>,
+    history: Vec<HistoryEntry>,
+    history_index: usize,
     watch: Option<watch::Watch>,
 }
 
@@ -47,6 +49,13 @@ struct State {
 enum SearchPanel {
     Document,
     Workspace,
+}
+
+/// One document visit; the mode is snapshotted when the entry is left.
+#[derive(Clone)]
+struct HistoryEntry {
+    path: PathBuf,
+    mode: Mode,
 }
 
 #[derive(Clone, Copy)]
@@ -81,6 +90,8 @@ impl State {
             find_index: 0,
             layout: layout::Layout::default(),
             drag: None,
+            history: Vec::new(),
+            history_index: 0,
             watch: None,
         }
     }
@@ -276,6 +287,66 @@ fn reload(state: Signal<State>) {
     }
 }
 
+fn can_back(state: &State) -> bool {
+    state.history_index > 0
+}
+
+fn can_forward(state: &State) -> bool {
+    state.history_index + 1 < state.history.len()
+}
+
+/// User navigation: record the visit, then open it.
+fn visit(mut state: Signal<State>, path: PathBuf) {
+    {
+        let mut state = state.write();
+        let index = state.history_index;
+        let mode = state.mode;
+        if let Some(current) = state.history.get_mut(index) {
+            current.mode = mode;
+        }
+        if state
+            .history
+            .get(index)
+            .is_none_or(|entry| entry.path != path)
+        {
+            state.history.truncate(index + 1);
+            state.history.push(HistoryEntry {
+                mode: Mode::for_path(&path),
+                path: path.clone(),
+            });
+            state.history_index = state.history.len() - 1;
+        }
+    }
+    open(state, path, None);
+}
+
+fn back(state: Signal<State>) {
+    travel(state, -1);
+}
+
+fn forward(state: Signal<State>) {
+    travel(state, 1);
+}
+
+/// Move through the history without recording a new visit.
+fn travel(mut state: Signal<State>, step: isize) {
+    let entry = {
+        let mut state = state.write();
+        let index = state.history_index;
+        let next = index as isize + step;
+        if next < 0 || next >= state.history.len() as isize {
+            return;
+        }
+        let mode = state.mode;
+        if let Some(current) = state.history.get_mut(index) {
+            current.mode = mode;
+        }
+        state.history_index = next as usize;
+        state.history[next as usize].clone()
+    };
+    open(state, entry.path, Some(entry.mode));
+}
+
 fn set_mode(mut state: Signal<State>, mode: Mode) {
     let markdown = state
         .peek()
@@ -318,7 +389,7 @@ fn follow(mut state: Signal<State>, href: String) {
     match destination {
         Some(Ok(Destination::Local(path))) => match path.is_dir() {
             true => workspace(state, path),
-            false => open(state, path, None),
+            false => visit(state, path),
         },
         Some(Ok(Destination::External(url))) => {
             spawn(async move {
@@ -353,7 +424,7 @@ fn activate(mut state: Signal<State>, entry: Entry) {
             load_tree(state, root);
         }
         (_, true) => reload(state),
-        _ => open(state, entry.path, None),
+        _ => visit(state, entry.path),
     }
 }
 
@@ -376,7 +447,7 @@ fn app() -> Element {
             }
             load_tree(state, launch.root);
             if let Some(path) = launch.file {
-                open(state, path, None);
+                visit(state, path);
             }
         }
     });
@@ -466,6 +537,12 @@ fn app() -> Element {
                     NativeKey::Named(NativeNamedKey::ArrowUp) if modifiers.get().alt_key() => {
                         parent(state)
                     }
+                    NativeKey::Named(NativeNamedKey::ArrowLeft) if modifiers.get().alt_key() => {
+                        back(state)
+                    }
+                    NativeKey::Named(NativeNamedKey::ArrowRight) if modifiers.get().alt_key() => {
+                        forward(state)
+                    }
                     NativeKey::Named(NativeNamedKey::Escape) => {
                         let mut state = state.write();
                         state.menu = None;
@@ -508,6 +585,16 @@ fn Shell(mut state: Signal<State>, onwindow: Option<EventHandler<WindowAction>>)
             onmounted: move |event| barrier.mount(event),
             onclick: move |_| {if state.peek().menu.is_some() {state.write().menu=None;}},
             header { class: "toolbar",
+                button { class: "nav-button", title: "Back (Alt+Left)", aria_label: "Back", disabled: !can_back(&snapshot), onclick: move |_| back(state),
+                    svg {width:"20",height:"20",view_box:"0 0 24 24",fill:"none",stroke:"currentColor",stroke_width:"2",stroke_linecap:"round",stroke_linejoin:"round",
+                        path {d:"M19 12H5M12 19l-7-7 7-7"}
+                    }
+                }
+                button { class: "nav-button", title: "Forward (Alt+Right)", aria_label: "Forward", disabled: !can_forward(&snapshot), onclick: move |_| forward(state),
+                    svg {width:"20",height:"20",view_box:"0 0 24 24",fill:"none",stroke:"currentColor",stroke_width:"2",stroke_linecap:"round",stroke_linejoin:"round",
+                        path {d:"M5 12h14M12 5l7 7-7 7"}
+                    }
+                }
                 button { class:"workspace-toggle", title: "Toggle workspace (Ctrl+B)", aria_label: "Toggle workspace", aria_expanded: snapshot.layout.sidebar_visible,
                     onclick: move |_| {let visible=state.peek().layout.sidebar_visible;state.write().layout.sidebar_visible = !visible;},
                     svg {width:"28",height:"28",view_box:"0 0 24 24",fill:"none",stroke:"currentColor",stroke_width:"1.8",stroke_linecap:"round",stroke_linejoin:"round",

@@ -13,6 +13,9 @@ dioxus-native = { version = "0.8.0-alpha.3", default-features = false, features 
 tokio = { version = "1", features = ["rt", "sync", "time"] }
 blitz-traits = { version = "0.3.0-beta.4", default-features = false }
 blitz-dom = { version = "0.3.0-beta.4", default-features = false }
+# Feature unification: blitz-shell's arboard is X11-only without this feature,
+# which silently writes the XWayland clipboard on Wayland sessions.
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 webbrowser = "1"
 clap = { version = "4", features = ["derive"] }
 ignore = "0.4"

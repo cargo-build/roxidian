@@ -58,6 +58,7 @@ directory as workspace; a folder becomes the workspace itself.
 | Ctrl+B | Hide/show the workspace sidebar |
 | Ctrl+C | Copy selected text |
 | Alt+Up | Parent workspace |
+| Alt+Left / Alt+Right | Back / forward through document history |
 | Ctrl+R | Reload directory and document |
 | Ctrl+Shift+C | Copy exact source |
 | Escape | Close search or folder menu |

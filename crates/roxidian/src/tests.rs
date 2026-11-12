@@ -308,3 +308,54 @@ fn native_hit_test_after_removed_content() {
     doc.poll(None);
     let _ = doc.inner.borrow().hit(10., 10.);
 }
+
+#[test]
+fn wayland_clipboard_roundtrip_restores_selection() {
+    use std::io::Write as _;
+    if std::env::var_os("WAYLAND_DISPLAY").is_none() {
+        eprintln!("skip: no Wayland session");
+        return;
+    }
+    let paste = || std::process::Command::new("wl-paste").arg("-n").output();
+    if paste().is_err() {
+        eprintln!("skip: wl-paste unavailable");
+        return;
+    }
+    let before = paste()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| out.stdout);
+    let probe = "roxidian clipboard probe 42";
+    arboard::Clipboard::new()
+        .expect("clipboard")
+        .set_text(probe)
+        .expect("clipboard write");
+    let after = paste().expect("wl-paste").stdout;
+    assert_eq!(String::from_utf8_lossy(&after), probe);
+    match before {
+        Some(bytes) => {
+            let mut child = std::process::Command::new("wl-copy")
+                .arg("-n")
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .expect("wl-copy");
+            child
+                .stdin
+                .take()
+                .expect("stdin")
+                .write_all(&bytes)
+                .expect("restore");
+            child.wait().expect("wl-copy wait");
+        }
+        None => {
+            std::process::Command::new("wl-copy")
+                .arg("--clear")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .expect("wl-copy clear");
+        }
+    }
+}

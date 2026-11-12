@@ -51,7 +51,7 @@ pub(super) fn WorkspaceSearch(mut state: Signal<State>) -> Element {
                 rsx! { button { class: "search-result", key: "{hit.path.display()}",
                     onclick: move |_| {
                         {let mut state=state.write();state.panel=None;state.find_index=0;state.find_query=if line.is_some() {excerpt.trim().to_owned()} else {String::new()};}
-                        open(state,path.clone(),None);
+                        visit(state,path.clone());
                     },
                     strong { "{hit.path.display()}" if let Some(line)=line {":{line}"} }
                     span { "{hit.excerpt}" }

@@ -23,6 +23,11 @@ the open document re-reads when its file or an ancestor folder changes. Watching
 writes files. A document deleted outside keeps its last snapshot with a visible error,
 as manual reload does; the chosen view mode survives an automatic refresh.
 
+Following a document link, tree row, search result or launch file records a visit.
+Toolbar back/forward arrows and Alt+Left/Alt+Right move through that history like a
+browser, restoring the document and the view mode chosen when it was left; a new visit
+clears the forward branch. Reload and external refresh add no history entries.
+
 SynthWave-inspired dark is the launch default. An Obsidian-inspired white palette is
 available in the same window. The UI never writes document or workspace files.
 

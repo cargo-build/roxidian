@@ -745,3 +745,60 @@ fn pump_until(
     doc.poll(None);
     barrier.flush();
 }
+
+#[test]
+fn history_back_and_forward_restore_documents_and_truncate() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let a = directory.path().join("a.md");
+    let b = directory.path().join("b.md");
+    let c = directory.path().join("c.md");
+    for path in [&a, &b, &c] {
+        std::fs::write(path, "# Doc\n").expect("fixture");
+    }
+    let Harness {
+        mut doc,
+        state,
+        barrier,
+    } = harness();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("runtime");
+    let _guard = runtime.enter();
+    let at = |path: &PathBuf| {
+        let path = path.clone();
+        move || {
+            state
+                .peek()
+                .document
+                .as_ref()
+                .is_some_and(|doc| doc.path == path)
+        }
+    };
+    doc.vdom.in_scope(ScopeId::APP, || visit(state, a.clone()));
+    pump_until(&mut doc, &runtime, &barrier, at(&a));
+    doc.vdom.in_scope(ScopeId::APP, || visit(state, b.clone()));
+    pump_until(&mut doc, &runtime, &barrier, at(&b));
+    assert!(can_back(&state.peek()));
+    assert!(!can_forward(&state.peek()));
+    doc.vdom.in_scope(ScopeId::APP, || back(state));
+    pump_until(&mut doc, &runtime, &barrier, at(&a));
+    assert!(can_forward(&state.peek()));
+    doc.vdom.in_scope(ScopeId::APP, || forward(state));
+    pump_until(&mut doc, &runtime, &barrier, at(&b));
+    doc.vdom.in_scope(ScopeId::APP, || back(state));
+    pump_until(&mut doc, &runtime, &barrier, at(&a));
+    doc.vdom.in_scope(ScopeId::APP, || visit(state, c.clone()));
+    pump_until(&mut doc, &runtime, &barrier, at(&c));
+    assert!(
+        !can_forward(&state.peek()),
+        "a new visit truncates the forward branch"
+    );
+    assert!(
+        doc.inner
+            .borrow()
+            .query_selector("button[aria-label=\"Back\"]")
+            .expect("selector")
+            .is_some()
+    );
+}
